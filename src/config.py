@@ -1,6 +1,8 @@
 """Конфигурация приложения."""
 
-from pydantic import Field
+from pathlib import Path
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -14,6 +16,9 @@ class Config(BaseSettings):
     system_prompt: str = Field(
         default="Ты полезный ассистент. Отвечай на вопросы пользователя дружелюбно и информативно.",
         description="System prompt for LLM",
+    )
+    system_prompt_file: str | None = Field(
+        default=None, description="Path to system prompt file (overrides system_prompt)"
     )
     max_history: int = Field(default=10, ge=1, le=50, description="Maximum dialog history length")
     llm_model: str = Field(default="openai/gpt-3.5-turbo", description="LLM model name")
@@ -35,6 +40,24 @@ class Config(BaseSettings):
         "env_prefix": "",
         "extra": "ignore",
     }
+
+    @field_validator("system_prompt_file")
+    @classmethod
+    def validate_prompt_file(cls, v: str | None) -> str | None:
+        """Валидация пути к файлу промпта.
+
+        Args:
+            v: Путь к файлу (опционально)
+
+        Returns:
+            Валидный путь или None
+
+        Raises:
+            ValueError: Если файл указан, но не существует
+        """
+        if v is not None and not Path(v).exists():
+            raise ValueError(f"Prompt file not found: {v}")
+        return v
 
     def __str__(self) -> str:
         """Строковое представление конфигурации (без секретных данных)."""

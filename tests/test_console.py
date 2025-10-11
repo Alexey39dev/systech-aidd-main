@@ -16,6 +16,7 @@ def mock_config():
     config = Mock(spec=Config)
     config.openrouter_api_key = "test_key"
     config.system_prompt = "Test prompt"
+    config.system_prompt_file = None
     config.max_history = 5
     config.llm_model = "test/model"
     config.llm_temperature = 0.7
@@ -438,3 +439,50 @@ async def test_stop_when_not_running(console_app):
     console_app.is_running = False
     await console_app.stop()
     assert console_app.is_running is False
+
+
+def test_console_role_command(tmp_path, mock_config):
+    """Тест команды /role отображает информацию о роли."""
+    # Arrange
+    prompt_file = tmp_path / "role.txt"
+    prompt_file.write_text(
+        "# Title: Test Assistant\n# Description: A test role\n\nYou are a test.",
+        encoding="utf-8",
+    )
+    mock_config.system_prompt_file = str(prompt_file)
+
+    with patch("src.console.LLMClient"):
+        app = ConsoleApp(mock_config)
+
+        # Act
+        with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+            app.print_role_info()
+            output = mock_stdout.getvalue()
+
+            # Assert
+            assert "Текущая роль:" in output
+            assert "Test Assistant" in output
+            assert "A test role" in output
+
+
+def test_console_role_command_without_file(console_app):
+    """Тест команды /role когда файл не указан."""
+    # Act
+    with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+        console_app.print_role_info()
+        output = mock_stdout.getvalue()
+
+        # Assert
+        assert "Текущая роль:" in output
+        assert "Default Role" in output
+
+
+def test_console_help_includes_role(console_app):
+    """Тест что /help содержит информацию о команде /role."""
+    # Act
+    with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+        console_app.print_help()
+        output = mock_stdout.getvalue()
+
+        # Assert
+        assert "/role" in output

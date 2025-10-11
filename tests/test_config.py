@@ -47,3 +47,35 @@ def test_config_validation():
             openrouter_api_key="test_api_key",
             max_history=100,  # Должно быть <= 50
         )
+
+
+def test_config_with_prompt_file(tmp_path):
+    """Тест Config с указанием файла промпта."""
+    # Arrange
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("# Title: Test\nYou are an assistant.", encoding="utf-8")
+
+    # Act
+    config = Config(openrouter_api_key="test", system_prompt_file=str(prompt_file))
+
+    # Assert
+    assert config.system_prompt_file == str(prompt_file)
+
+
+def test_config_prompt_file_optional():
+    """Тест что system_prompt_file опционален."""
+    # Act
+    config = Config(openrouter_api_key="test")
+
+    # Assert
+    assert config.system_prompt_file is None
+
+
+def test_config_validates_file_path(tmp_path):
+    """Тест валидации пути к файлу промпта."""
+    # Arrange
+    non_existent_file = tmp_path / "nonexistent.txt"
+
+    # Act & Assert - должна быть ошибка валидации
+    with pytest.raises(ValueError, match="Prompt file not found"):
+        Config(openrouter_api_key="test", system_prompt_file=str(non_existent_file))

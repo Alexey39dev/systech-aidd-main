@@ -15,6 +15,7 @@ def mock_config():
     config = Mock(spec=Config)
     config.openrouter_api_key = "test_key"
     config.system_prompt = "Ты полезный ассистент"
+    config.system_prompt_file = None
     config.max_history = 3
     config.llm_model = "test/model"
     config.llm_temperature = 0.7

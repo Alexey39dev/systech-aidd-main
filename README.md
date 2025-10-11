@@ -62,29 +62,35 @@
 
 ```
 systech-aidd/
-├── src/                    # Исходный код (11 модулей)
+├── src/                    # Исходный код (12 модулей)
 │   ├── console.py         # ConsoleApp - консольный интерфейс
 │   ├── llm_client.py      # LLMClient - клиент для LLM
 │   ├── dialog_manager.py  # DialogManager - управление историей
 │   ├── config.py          # Config - конфигурация приложения
 │   ├── logger.py          # Logger - структурированное логирование
 │   ├── main.py            # Точка входа приложения
-│   ├── exceptions.py      # 🆕 Кастомные исключения (иерархия LLMError)
-│   ├── retry_utils.py     # 🆕 Retry логика с экспоненциальным backoff
-│   ├── types.py           # 🆕 TypedDict и Literal для строгой типизации
-│   ├── messages.py        # 🆕 Enum классы для сообщений (DRY принцип)
-│   └── py.typed           # 🆕 PEP 561 маркер для type hints
-├── tests/                 # Тесты (149 тестов, 87.59% coverage)
+│   ├── role_manager.py    # 🆕 RoleManager - система ролей
+│   ├── exceptions.py      # Кастомные исключения (иерархия LLMError)
+│   ├── retry_utils.py     # Retry логика с экспоненциальным backoff
+│   ├── types.py           # TypedDict и Literal для строгой типизации
+│   ├── messages.py        # Enum классы для сообщений (DRY принцип)
+│   └── py.typed           # PEP 561 маркер для type hints
+├── prompts/               # 🆕 Файлы промптов с метаданными
+│   ├── default.txt        # Базовая роль
+│   ├── tech_support.txt   # Техническая поддержка
+│   └── code_reviewer.txt  # Ревью кода
+├── tests/                 # Тесты (164 теста, 88.82% coverage)
 │   ├── test_config.py
 │   ├── test_console.py
 │   ├── test_dialog_manager.py
 │   ├── test_llm_client.py
 │   ├── test_integration.py
-│   ├── test_exceptions.py      # 🆕 Тесты кастомных исключений
-│   ├── test_retry_utils.py     # 🆕 Тесты retry логики
-│   ├── test_logger.py          # 🆕 Тесты логирования
-│   ├── test_messages.py        # 🆕 Тесты сообщений
-│   └── test_main.py            # 🆕 Тесты ApplicationContext
+│   ├── test_role_manager.py    # 🆕 Тесты системы ролей
+│   ├── test_exceptions.py
+│   ├── test_retry_utils.py
+│   ├── test_logger.py
+│   ├── test_messages.py
+│   └── test_main.py
 ├── docs/                  # Документация
 │   ├── vision.md          # Техническое видение
 │   ├── configuration.md   # Руководство по конфигурации
@@ -178,6 +184,7 @@ make clean        # Очистить временные файлы
 - `/help` - Показать справку с примерами
 - `/history` - Показать историю диалога
 - `/stats` - Показать статистику диалога
+- `/role` - Показать информацию о текущей роли ассистента
 - `/clear` - Очистить историю диалога
 - `/exit` - Выйти из приложения
 
@@ -197,6 +204,62 @@ make clean        # Очистить временные файлы
   Макс. история (пар): 10
   Заполненность истории: 20.0%
 ```
+
+## 🎭 Система ролей
+
+Приложение поддерживает загрузку системных промптов из файлов с метаданными. Это позволяет легко переключаться между разными ролями ассистента.
+
+### Формат файла промпта
+
+```
+# Title: Название роли
+# Description: Описание роли (может быть многострочным)
+
+Здесь идет содержимое системного промпта...
+```
+
+### Примеры ролей
+
+В директории `prompts/` находятся готовые примеры:
+
+- **`default.txt`** - Общий ассистент (базовая роль)
+- **`tech_support.txt`** - Техническая поддержка
+- **`code_reviewer.txt`** - Ревью кода
+
+### Использование
+
+1. **Создайте файл промпта** в директории `prompts/`
+2. **Укажите путь** в `.env`:
+   ```bash
+   SYSTEM_PROMPT_FILE=prompts/tech_support.txt
+   ```
+3. **Запустите** приложение - роль будет загружена автоматически
+4. **Проверьте** текущую роль командой `/role`
+
+**Пример вывода `/role`:**
+```
+----------------------------------------------------------------------
+📋 Текущая роль:
+----------------------------------------------------------------------
+Название: Technical Support Specialist
+Описание: Provides technical support, troubleshooting help, and guides users through problem resolution.
+Источник: prompts\tech_support.txt
+----------------------------------------------------------------------
+```
+
+### Создание собственной роли
+
+Создайте новый файл в `prompts/`, например `my_role.txt`:
+
+```
+# Title: My Custom Assistant
+# Description: A specialized assistant for my specific needs
+
+You are a friendly assistant specialized in...
+[ваши инструкции для ассистента]
+```
+
+Затем укажите его в `.env`: `SYSTEM_PROMPT_FILE=prompts/my_role.txt`
 
 ## 📚 Документация
 
@@ -218,6 +281,7 @@ make clean        # Очистить временные файлы
 ### Основные возможности
 - **Простота**: Минимальный MVP без оверинжиниринга (KISS принцип)
 - **Консольный интерфейс**: Удобная работа через терминал
+- **Система ролей**: Загрузка промптов из файлов с метаданными (см. `prompts/`)
 - **Асинхронность**: Высокая производительность с async/await
 - **Модульность**: Четкое разделение ответственности (1 класс = 1 файл)
 - **Гибкость**: Легкая настройка роли ассистента через системный промпт

@@ -1,6 +1,7 @@
 """Консольный интерфейс для LLM-ассистента."""
 
 import asyncio
+from pathlib import Path
 
 from .config import Config
 from .dialog_manager import DialogManager
@@ -8,6 +9,7 @@ from .exceptions import LLMError
 from .llm_client import LLMClient
 from .logger import get_logger
 from .messages import ErrorMessages, InfoMessages
+from .role_manager import RoleManager
 
 
 class ConsoleApp:
@@ -24,6 +26,9 @@ class ConsoleApp:
         self.logger = get_logger("console")
         self.llm_client = LLMClient(config)
         self.dialog_manager = DialogManager(max_history=config.max_history)
+        self.role_manager = RoleManager(
+            Path(config.system_prompt_file) if config.system_prompt_file else None
+        )
         self.is_running = False
 
     async def get_response(self, user_message: str) -> str:
@@ -137,6 +142,18 @@ class ConsoleApp:
 
         print(InfoMessages.SEPARATOR_SHORT.value + "\n")
 
+    def print_role_info(self) -> None:
+        """Вывод информации о текущей роли."""
+        role_info = self.role_manager.get_role_info()
+
+        print("\n" + InfoMessages.SEPARATOR_SHORT.value)
+        print("📋 Текущая роль:")
+        print(InfoMessages.SEPARATOR_SHORT.value)
+        print(f"Название: {role_info['title']}")
+        print(f"Описание: {role_info['description']}")
+        print(f"Источник: {role_info['source']}")
+        print(InfoMessages.SEPARATOR_SHORT.value + "\n")
+
     def print_welcome(self) -> None:
         """Вывод приветственного сообщения."""
         print("\n" + InfoMessages.SEPARATOR.value)
@@ -146,6 +163,7 @@ class ConsoleApp:
         print(InfoMessages.CMD_HELP.value)
         print(InfoMessages.CMD_HISTORY.value)
         print(InfoMessages.CMD_STATS.value)
+        print("  /role     - Показать информацию о текущей роли")
         print(InfoMessages.CMD_CLEAR.value)
         print(InfoMessages.CMD_EXIT.value)
         print("\nПросто введите ваш вопрос и нажмите Enter для отправки.")
@@ -160,6 +178,7 @@ class ConsoleApp:
         print(InfoMessages.CMD_HELP.value)
         print(InfoMessages.CMD_HISTORY.value)
         print(InfoMessages.CMD_STATS.value)
+        print("  /role     - Показать информацию о текущей роли")
         print(InfoMessages.CMD_CLEAR.value)
         print(InfoMessages.CMD_EXIT.value)
 
@@ -196,6 +215,8 @@ class ConsoleApp:
             self.print_history()
         elif command == "/stats":
             self.print_stats()
+        elif command == "/role":
+            self.print_role_info()
         elif command == "/clear":
             stats = self.dialog_manager.get_conversation_summary()
             self.clear_history()
