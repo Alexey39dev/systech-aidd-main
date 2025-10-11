@@ -57,31 +57,92 @@ class ConsoleApp:
         """Очистка истории диалога."""
         self.dialog_manager.clear_history()
 
+    def print_history(self) -> None:
+        """Вывод истории диалога."""
+        history = self.dialog_manager.get_history()
+        
+        if not history:
+            print("\nИстория диалога пуста.\n")
+            return
+        
+        print("\n" + "-" * 70)
+        print("История диалога:")
+        print("-" * 70)
+        
+        for i, msg in enumerate(history, 1):
+            role = "Вы" if msg["role"] == "user" else "Ассистент"
+            content = msg["content"]
+            
+            # Ограничиваем длину для удобства чтения
+            if len(content) > 100:
+                content = content[:97] + "..."
+            
+            print(f"{i}. {role}: {content}")
+        
+        print("-" * 70)
+        print(f"Всего сообщений: {len(history)}")
+        print("-" * 70 + "\n")
+
+    def print_stats(self) -> None:
+        """Вывод статистики диалога."""
+        stats = self.dialog_manager.get_conversation_summary()
+        
+        print("\n" + "-" * 70)
+        print("Статистика диалога:")
+        print("-" * 70)
+        print(f"  Всего сообщений: {stats['total_messages']}")
+        print(f"  Ваших сообщений: {stats['user_messages']}")
+        print(f"  Ответов ассистента: {stats['assistant_messages']}")
+        print(f"  Макс. история (пар): {stats['max_history']}")
+        
+        # Процент заполненности истории
+        max_messages = stats['max_history'] * 2
+        fill_percent = (stats['total_messages'] / max_messages * 100) if max_messages > 0 else 0
+        print(f"  Заполненность истории: {fill_percent:.1f}%")
+        
+        print("-" * 70 + "\n")
+
     def print_welcome(self) -> None:
         """Вывод приветственного сообщения."""
         print("\n" + "=" * 70)
         print("LLM-Ассистент через консоль")
         print("=" * 70)
         print("\nДоступные команды:")
-        print("  /help    - Показать эту справку")
-        print("  /clear   - Очистить историю диалога")
-        print("  /exit    - Выйти из приложения")
+        print("  /help     - Показать справку с примерами")
+        print("  /history  - Показать историю диалога")
+        print("  /stats    - Показать статистику диалога")
+        print("  /clear    - Очистить историю диалога")
+        print("  /exit     - Выйти из приложения")
         print("\nПросто введите ваш вопрос и нажмите Enter для отправки.")
         print("=" * 70 + "\n")
 
     def print_help(self) -> None:
-        """Вывод справки."""
+        """Вывод справки с примерами."""
         print("\n" + "-" * 70)
         print("Справка по командам:")
         print("-" * 70)
-        print("  /help    - Показать эту справку")
-        print("  /clear   - Очистить историю диалога")
-        print("  /exit    - Выйти из приложения")
+        print("\nОсновные команды:")
+        print("  /help     - Показать эту справку")
+        print("  /history  - Показать историю диалога")
+        print("  /stats    - Показать статистику (количество сообщений)")
+        print("  /clear    - Очистить историю диалога")
+        print("  /exit     - Выйти из приложения")
+        
+        print("\nПримеры использования:")
+        print("  Вы: Привет! Как дела?")
+        print("  Ассистент: [ответ ассистента]")
+        print()
+        print("  Вы: /history")
+        print("  [показывает историю ваших сообщений]")
+        print()
+        print("  Вы: /clear")
+        print("  [очищает историю диалога]")
+        
         print(f"\nТекущая конфигурация:")
         print(f"  Модель: {self.config.llm_model}")
         print(f"  Температура: {self.config.llm_temperature}")
-        print(f"  Макс. токенов: {self.config.llm_max_tokens}")
-        print(f"  Макс. история: {self.config.max_history}")
+        print(f"  Макс. токенов ответа: {self.config.llm_max_tokens}")
+        print(f"  Макс. история (пар): {self.config.max_history}")
         print("-" * 70 + "\n")
 
     async def handle_command(self, command: str) -> bool:
@@ -101,6 +162,10 @@ class ConsoleApp:
             return False
         elif command == "/help":
             self.print_help()
+        elif command == "/history":
+            self.print_history()
+        elif command == "/stats":
+            self.print_stats()
         elif command == "/clear":
             stats = self.dialog_manager.get_conversation_summary()
             self.clear_history()
