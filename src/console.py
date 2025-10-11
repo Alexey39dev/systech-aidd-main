@@ -1,13 +1,13 @@
 """Консольный интерфейс для LLM-ассистента."""
 
 import asyncio
-from typing import Optional
-from openai import APIError, APIConnectionError, RateLimitError, APITimeoutError
 
 from .config import Config
-from .llm_client import LLMClient
 from .dialog_manager import DialogManager
+from .exceptions import LLMError
+from .llm_client import LLMClient
 from .logger import get_logger
+from .messages import ErrorMessages, InfoMessages
 
 
 class ConsoleApp:
@@ -41,61 +41,45 @@ class ConsoleApp:
             response = await self.llm_client.get_response(
                 user_message=user_message,
                 system_prompt=self.config.system_prompt,
-                conversation_history=self.dialog_manager.get_history()
+                conversation_history=self.dialog_manager.get_history(),
             )
-            
+
             # Добавляем в историю после успешного получения ответа
             self.dialog_manager.add_user_message(user_message)
             self.dialog_manager.add_assistant_message(response)
-            
+
             return response
-        
-        except RateLimitError as e:
-            self.logger.error("Rate limit превышен", error=str(e))
-            return (
-                "Извините, превышен лимит запросов к сервису. "
-                "Пожалуйста, подождите немного и попробуйте снова."
+
+        except LLMError as e:
+            # Обработка всех LLM ошибок
+            self.logger.error(
+                "Ошибка работы с LLM",
+                error=str(e),
+                error_type=type(e).__name__,
+                details=e.details,
             )
-            
-        except APIConnectionError as e:
-            self.logger.error("Ошибка подключения к API", error=str(e))
-            return (
-                "Извините, не удалось подключиться к серверу. "
-                "Проверьте подключение к интернету и попробуйте снова."
-            )
-            
-        except APITimeoutError as e:
-            self.logger.error("Таймаут API", error=str(e))
-            return (
-                "Извините, сервер не ответил вовремя. "
-                "Попробуйте отправить запрос еще раз."
-            )
-            
-        except APIError as e:
-            self.logger.error("Ошибка API", error=str(e), status_code=getattr(e, 'status_code', None))
-            if hasattr(e, 'status_code'):
-                if 400 <= e.status_code < 500:
-                    return (
-                        f"Извините, произошла ошибка запроса (код {e.status_code}). "
-                        "Попробуйте перефразировать ваш вопрос."
-                    )
-                elif 500 <= e.status_code < 600:
-                    return (
-                        f"Извините, на сервере произошла ошибка (код {e.status_code}). "
-                        "Попробуйте позже."
-                    )
-            return "Извините, произошла ошибка при обращении к сервису."
-            
+
+            # Пытаемся получить fallback ответ
+            try:
+                return await self.llm_client.get_fallback_response(user_message)
+            except Exception as fallback_error:
+                self.logger.error(
+                    "Не удалось получить fallback ответ",
+                    error=str(fallback_error),
+                )
+            return ErrorMessages.LLM_ERROR.value
+
         except KeyboardInterrupt:
             # Пробрасываем дальше для корректного завершения
             raise
-            
+
         except Exception as e:
-            self.logger.error("Неожиданная ошибка получения ответа", error=str(e), error_type=type(e).__name__)
-            return (
-                "Извините, произошла неожиданная ошибка. "
-                "Попробуйте еще раз или обратитесь к администратору."
+            self.logger.error(
+                "Неожиданная ошибка получения ответа",
+                error=str(e),
+                error_type=type(e).__name__,
             )
+            return ErrorMessages.UNEXPECTED_ERROR.value
 
     def clear_history(self) -> None:
         """Очистка истории диалога."""
@@ -104,90 +88,92 @@ class ConsoleApp:
     def print_history(self) -> None:
         """Вывод истории диалога."""
         history = self.dialog_manager.get_history()
-        
+
         if not history:
-            print("\nИстория диалога пуста.\n")
+            print(InfoMessages.HISTORY_EMPTY.value)
             return
-        
-        print("\n" + "-" * 70)
-        print("История диалога:")
-        print("-" * 70)
-        
+
+        print("\n" + InfoMessages.SEPARATOR_SHORT.value)
+        print(InfoMessages.HISTORY_HEADER.value)
+        print(InfoMessages.SEPARATOR_SHORT.value)
+
         for i, msg in enumerate(history, 1):
             role = "Вы" if msg["role"] == "user" else "Ассистент"
             content = msg["content"]
-            
+
             # Ограничиваем длину для удобства чтения
             if len(content) > 100:
                 content = content[:97] + "..."
-            
+
             print(f"{i}. {role}: {content}")
-        
-        print("-" * 70)
+
+        print(InfoMessages.SEPARATOR_SHORT.value)
         print(f"Всего сообщений: {len(history)}")
-        print("-" * 70 + "\n")
+        print(InfoMessages.SEPARATOR_SHORT.value + "\n")
 
     def print_stats(self) -> None:
         """Вывод статистики диалога."""
         stats = self.dialog_manager.get_conversation_summary()
-        
-        print("\n" + "-" * 70)
-        print("Статистика диалога:")
-        print("-" * 70)
-        print(f"  Всего сообщений: {stats['total_messages']}")
-        print(f"  Ваших сообщений: {stats['user_messages']}")
-        print(f"  Ответов ассистента: {stats['assistant_messages']}")
-        print(f"  Макс. история (пар): {stats['max_history']}")
-        
+
+        print("\n" + InfoMessages.SEPARATOR_SHORT.value)
+        print(InfoMessages.STATS_HEADER.value)
+        print(InfoMessages.SEPARATOR_SHORT.value)
+        print(InfoMessages.STATS_TOTAL.value.format(total=stats["total_messages"]))
+        print(InfoMessages.STATS_USER.value.format(user=stats["user_messages"]))
+        print(InfoMessages.STATS_ASSISTANT.value.format(assistant=stats["assistant_messages"]))
+        print(InfoMessages.STATS_MAX_HISTORY.value.format(max_history=stats["max_history"]))
+
         # Процент заполненности истории
-        max_messages = stats['max_history'] * 2
-        fill_percent = (stats['total_messages'] / max_messages * 100) if max_messages > 0 else 0
-        print(f"  Заполненность истории: {fill_percent:.1f}%")
-        
-        print("-" * 70 + "\n")
+        max_pairs = stats["max_history"]
+        current_pairs = stats["total_messages"] // 2
+        usage_percent = (current_pairs / max_pairs * 100) if max_pairs > 0 else 0
+        print(
+            InfoMessages.STATS_USAGE.value.format(
+                usage_percent=f"{usage_percent:.1f}",
+                current=current_pairs,
+                max_pairs=max_pairs,
+            )
+        )
+
+        print(InfoMessages.SEPARATOR_SHORT.value + "\n")
 
     def print_welcome(self) -> None:
         """Вывод приветственного сообщения."""
-        print("\n" + "=" * 70)
-        print("LLM-Ассистент через консоль")
-        print("=" * 70)
-        print("\nДоступные команды:")
-        print("  /help     - Показать справку с примерами")
-        print("  /history  - Показать историю диалога")
-        print("  /stats    - Показать статистику диалога")
-        print("  /clear    - Очистить историю диалога")
-        print("  /exit     - Выйти из приложения")
+        print("\n" + InfoMessages.SEPARATOR.value)
+        print(InfoMessages.WELCOME_HEADER.value)
+        print(InfoMessages.SEPARATOR.value)
+        print(InfoMessages.AVAILABLE_COMMANDS.value)
+        print(InfoMessages.CMD_HELP.value)
+        print(InfoMessages.CMD_HISTORY.value)
+        print(InfoMessages.CMD_STATS.value)
+        print(InfoMessages.CMD_CLEAR.value)
+        print(InfoMessages.CMD_EXIT.value)
         print("\nПросто введите ваш вопрос и нажмите Enter для отправки.")
-        print("=" * 70 + "\n")
+        print(InfoMessages.SEPARATOR.value + "\n")
 
     def print_help(self) -> None:
         """Вывод справки с примерами."""
-        print("\n" + "-" * 70)
-        print("Справка по командам:")
-        print("-" * 70)
-        print("\nОсновные команды:")
-        print("  /help     - Показать эту справку")
-        print("  /history  - Показать историю диалога")
-        print("  /stats    - Показать статистику (количество сообщений)")
-        print("  /clear    - Очистить историю диалога")
-        print("  /exit     - Выйти из приложения")
-        
-        print("\nПримеры использования:")
-        print("  Вы: Привет! Как дела?")
-        print("  Ассистент: [ответ ассистента]")
-        print()
-        print("  Вы: /history")
-        print("  [показывает историю ваших сообщений]")
-        print()
-        print("  Вы: /clear")
-        print("  [очищает историю диалога]")
-        
-        print(f"\nТекущая конфигурация:")
-        print(f"  Модель: {self.config.llm_model}")
-        print(f"  Температура: {self.config.llm_temperature}")
-        print(f"  Макс. токенов ответа: {self.config.llm_max_tokens}")
-        print(f"  Макс. история (пар): {self.config.max_history}")
-        print("-" * 70 + "\n")
+        print("\n" + InfoMessages.SEPARATOR_SHORT.value)
+        print(InfoMessages.HELP_HEADER.value)
+        print(InfoMessages.SEPARATOR_SHORT.value)
+        print(InfoMessages.MAIN_COMMANDS.value)
+        print(InfoMessages.CMD_HELP.value)
+        print(InfoMessages.CMD_HISTORY.value)
+        print(InfoMessages.CMD_STATS.value)
+        print(InfoMessages.CMD_CLEAR.value)
+        print(InfoMessages.CMD_EXIT.value)
+
+        print(InfoMessages.EXAMPLES_HEADER.value)
+        print(InfoMessages.EXAMPLE_1.value)
+        print(InfoMessages.EXAMPLE_2.value)
+        print(InfoMessages.EXAMPLE_3.value)
+
+        print(InfoMessages.SETTINGS_HEADER.value)
+        print(InfoMessages.SETTING_MODEL.value.format(model=self.config.llm_model))
+        print(InfoMessages.SETTING_TEMP.value.format(temperature=self.config.llm_temperature))
+        print(InfoMessages.SETTING_MAX_TOKENS.value.format(max_tokens=self.config.llm_max_tokens))
+        print(InfoMessages.SETTING_MAX_HISTORY.value.format(max_history=self.config.max_history))
+        print(InfoMessages.SEPARATOR_SHORT.value + "\n")
 
     async def handle_command(self, command: str) -> bool:
         """
@@ -200,7 +186,7 @@ class ConsoleApp:
             True если нужно продолжить работу, False для выхода
         """
         command = command.lower().strip()
-        
+
         if command == "/exit":
             print("\nДо свидания!")
             return False
@@ -213,49 +199,47 @@ class ConsoleApp:
         elif command == "/clear":
             stats = self.dialog_manager.get_conversation_summary()
             self.clear_history()
-            print(f"История диалога очищена (удалено сообщений: {stats['total_messages']}).\n")
+            print(InfoMessages.HISTORY_CLEARED.value.format(count=stats["total_messages"]))
         else:
-            print(f"Неизвестная команда: {command}")
+            print(ErrorMessages.UNKNOWN_COMMAND.value.format(command=command))
             print("Введите /help для просмотра доступных команд.\n")
-        
+
         return True
 
     async def run(self) -> None:
         """Запуск консольного приложения."""
         self.is_running = True
         self.print_welcome()
-        
+
         try:
             while self.is_running:
                 try:
                     # Получение ввода пользователя
-                    user_input = await asyncio.get_event_loop().run_in_executor(
-                        None, input, "Вы: "
-                    )
-                    
+                    user_input = await asyncio.get_event_loop().run_in_executor(None, input, "Вы: ")
+
                     # Проверка на пустой ввод
                     if not user_input.strip():
                         continue
-                    
+
                     # Обработка команд
                     if user_input.startswith("/"):
                         should_continue = await self.handle_command(user_input)
                         if not should_continue:
                             break
                         continue
-                    
+
                     # Получение и вывод ответа
                     print("\nАссистент: ", end="", flush=True)
                     response = await self.get_response(user_input)
                     print(response + "\n")
-                    
+
                 except KeyboardInterrupt:
                     print("\n\nПолучен сигнал прерывания. До свидания!")
                     break
                 except EOFError:
                     print("\n\nДо свидания!")
                     break
-                    
+
         except Exception as e:
             self.logger.error("Критическая ошибка в консольном приложении", error=str(e))
             print(f"\nКритическая ошибка: {str(e)}")
@@ -265,4 +249,3 @@ class ConsoleApp:
     async def stop(self) -> None:
         """Остановка консольного приложения."""
         self.is_running = False
-

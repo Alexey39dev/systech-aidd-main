@@ -1,0 +1,317 @@
+---
+alwaysApply: true
+---
+# TDD Workflow разработки
+
+> Test-Driven Development подход для систематической разработки с упором на тесты
+
+## 🎯 Основные принципы TDD
+
+- **Test First** - сначала тест, потом код
+- **Red → Green → Refactor** - цикл разработки через failing → passing → улучшение
+- **Baby Steps** - маленькие шаги с частым запуском тестов
+- **Согласование** - показывать план тестов перед реализацией
+- **Прогресс** - отмечать выполненные задачи и коммитить
+
+## 📋 Алгоритм работы (TDD-адаптированный)
+
+### 1. Выбор итерации
+- [ ] Определить следующую итерацию из `tasklist.md`
+- [ ] Проверить, что предыдущая итерация завершена
+- [ ] Убедиться, что все задачи текущей итерации понятны
+
+### 2. Планирование решения (Test-First Planning)
+- [ ] Проанализировать задачи итерации
+- [ ] **Спроектировать тесты** - какие тест-кейсы нужны
+- [ ] Предложить архитектурное решение
+- [ ] Показать примеры тестов (Red phase)
+- [ ] Описать минимальную реализацию (Green phase)
+
+### 3. Согласование с пользователем
+- [ ] Представить план тестов
+- [ ] Показать примеры failing тестов
+- [ ] Показать план минимальной реализации
+- [ ] Дождаться одобрения от пользователя
+- [ ] Внести изменения по замечаниям
+
+### 4. TDD Реализация (Red → Green → Refactor)
+
+#### 🔴 RED Phase - Failing Test
+- [ ] Написать failing тест, описывающий желаемое поведение
+- [ ] Запустить тест - убедиться, что он падает
+- [ ] Тест должен падать по правильной причине
+- [ ] Зафиксировать Red phase
+
+#### 🟢 GREEN Phase - Minimal Implementation
+- [ ] Написать минимальный код для прохождения теста
+- [ ] Запустить тест - убедиться, что он проходит
+- [ ] Все старые тесты также должны проходить
+- [ ] Зафиксировать Green phase
+
+#### 🔵 REFACTOR Phase - Code Improvement
+- [ ] Улучшить код (DRY, KISS, читаемость)
+- [ ] Запустить все тесты - убедиться, что проходят
+- [ ] Улучшить тесты при необходимости
+- [ ] Зафиксировать Refactor phase
+
+#### 🔄 Повторить цикл для следующей функции
+- [ ] Перейти к следующей функции/методу
+- [ ] Повторить Red → Green → Refactor
+- [ ] Продолжать до выполнения всех задач итерации
+
+### 5. Финальное тестирование
+- [ ] Запустить весь набор тестов (`make test`)
+- [ ] Проверить coverage (должен быть >80%)
+- [ ] Выполнить integration тесты
+- [ ] Убедиться в отсутствии регрессий
+
+### 6. Обновление прогресса
+- [ ] Отметить выполненные задачи в `tasklist.md`
+- [ ] Обновить статус итерации
+- [ ] Добавить примечания о coverage и тестах
+- [ ] Подготовить коммит
+
+### 7. Фиксация изменений
+- [ ] Сделать коммит с описанием итерации
+- [ ] Указать количество тестов и coverage
+- [ ] Убедиться, что все изменения сохранены
+- [ ] Подтвердить готовность к следующей итерации
+
+## 🔄 TDD Шаблоны для каждой итерации
+
+### Планирование (Test-First)
+```
+## Итерация X: [Название]
+
+**Задачи:**
+- [ ] Задача 1
+- [ ] Задача 2
+- [ ] ...
+
+**План тестов (Test Cases):**
+1. Тест инициализации
+2. Тест основного сценария (happy path)
+3. Тест обработки ошибок
+4. Тест edge cases
+
+**Архитектурное решение:**
+[Описание классов/функций и их взаимодействия]
+
+**Примеры тестов (RED):**
+\`\`\`python
+def test_add_user_message():
+    """Тест добавления сообщения пользователя."""
+    manager = DialogManager(max_history=5)
+    manager.add_user_message("Hello")
+    assert len(manager) == 1
+    assert manager.get_history()[0]["role"] == "user"
+\`\`\`
+
+**План реализации (GREEN):**
+\`\`\`python
+class DialogManager:
+    def __init__(self, max_history: int = 10):
+        self.max_history = max_history
+        self.messages: list[MessageDict] = []
+    
+    def add_user_message(self, content: str) -> None:
+        self.messages.append({"role": "user", "content": content})
+\`\`\`
+
+Готов ли я приступить к TDD реализации?
+```
+
+### 🔴 RED Phase - Failing Test
+```
+## RED Phase: [Функция/Метод]
+
+**Failing Test:**
+\`\`\`python
+# tests/test_dialog_manager.py
+def test_add_user_message():
+    manager = DialogManager(max_history=5)
+    manager.add_user_message("Hello")  # <-- Метод не существует
+    assert len(manager) == 1
+\`\`\`
+
+**Результат запуска:**
+\`\`\`
+pytest tests/test_dialog_manager.py::test_add_user_message
+FAILED - AttributeError: 'DialogManager' object has no attribute 'add_user_message'
+\`\`\`
+
+✅ Тест падает по правильной причине - метод не реализован.
+
+Переходим к GREEN phase.
+```
+
+### 🟢 GREEN Phase - Minimal Implementation
+```
+## GREEN Phase: [Функция/Метод]
+
+**Минимальная реализация:**
+\`\`\`python
+# src/dialog_manager.py
+class DialogManager:
+    def __init__(self, max_history: int = 10):
+        self.max_history = max_history
+        self.messages: list[MessageDict] = []
+    
+    def add_user_message(self, content: str) -> None:
+        """Добавить сообщение пользователя."""
+        self.messages.append({"role": "user", "content": content})
+    
+    def __len__(self) -> int:
+        """Количество сообщений."""
+        return len(self.messages)
+\`\`\`
+
+**Результат запуска:**
+\`\`\`
+pytest tests/test_dialog_manager.py::test_add_user_message
+PASSED ✅
+\`\`\`
+
+✅ Тест проходит! Переходим к REFACTOR phase (если нужно).
+```
+
+### 🔵 REFACTOR Phase - Improvement
+```
+## REFACTOR Phase: [Улучшение]
+
+**Что улучшаем:**
+- Добавить валидацию пустых сообщений
+- Улучшить type hints
+- Добавить docstrings
+
+**Улучшенный код:**
+\`\`\`python
+def add_user_message(self, content: str) -> None:
+    """Добавить сообщение пользователя в историю.
+    
+    Args:
+        content: Текст сообщения (не пустой)
+    """
+    if not content or not content.strip():
+        return  # Игнорируем пустые сообщения
+    
+    self.messages.append({"role": "user", "content": content.strip()})
+\`\`\`
+
+**Результат запуска всех тестов:**
+\`\`\`
+pytest tests/test_dialog_manager.py
+PASSED (all tests) ✅
+Coverage: 95%
+\`\`\`
+
+✅ Рефакторинг завершен, тесты проходят.
+```
+
+### Итоговая реализация итерации
+```
+## Итерация X завершена
+
+**Выполненные задачи:**
+- [x] Задача 1 - DialogManager.add_user_message() (RED → GREEN → REFACTOR)
+- [x] Задача 2 - DialogManager.add_assistant_message() (RED → GREEN → REFACTOR)
+- [x] Задача 3 - DialogManager.clear_history() (RED → GREEN)
+
+**TDD Статистика:**
+- Всего циклов RED-GREEN-REFACTOR: 3
+- Тестов написано: 8
+- Coverage: 92%
+- Все тесты: PASSED ✅
+
+**Результат тестирования:**
+\`\`\`bash
+$ make test
+===== 8 passed in 0.5s =====
+Coverage: 92%
+\`\`\`
+
+**Готово к следующей итерации?** ✅
+```
+
+## ⚠️ Важные правила TDD
+
+### Обязательные действия
+- **Всегда RED first** - сначала failing тест, потом код
+- **Запускать тесты часто** - после каждого маленького изменения
+- **Green перед Refactor** - рефакторить только зеленый код
+- **Все тесты зеленые** - перед коммитом все тесты должны проходить
+- **Коммитить часто** - после каждого завершенного цикла RED-GREEN-REFACTOR
+
+### Запрещенные действия
+- **Нельзя** писать код до теста (нарушение TDD)
+- **Нельзя** писать несколько тестов сразу (baby steps)
+- **Нельзя** рефакторить на красной полосе
+- **Нельзя** пропускать запуск тестов
+- **Нельзя** коммитить failing тесты
+
+### Критерии готовности цикла
+- ✅ RED: Тест написан и падает по правильной причине
+- ✅ GREEN: Тест проходит с минимальной реализацией
+- ✅ REFACTOR: Код улучшен, все тесты проходят
+- ✅ COMMIT: Изменения зафиксированы
+
+### Критерии готовности итерации
+- ✅ Все задачи пройдены через RED-GREEN-REFACTOR
+- ✅ Coverage >80%
+- ✅ Все тесты проходят (`make test`)
+- ✅ Прогресс обновлен в `tasklist.md`
+- ✅ Изменения закоммичены
+- ✅ Пользователь подтвердил готовность
+
+## 🎓 TDD Best Practices
+
+### Размер шагов
+- **Маленькие шаги** - один тест = одна функция/метод
+- **Быстрые циклы** - RED → GREEN → REFACTOR за 5-15 минут
+- **Частые коммиты** - после каждого завершенного цикла
+
+### Качество тестов
+- **Понятные имена** - `test_add_message_valid_input()`
+- **AAA структура** - Arrange, Act, Assert
+- **Одна проверка** - один тест = одна концепция
+- **Независимость** - тесты не зависят друг от друга
+
+### Рефакторинг
+- **Только на зеленом** - все тесты проходят
+- **DRY принцип** - убрать дублирование
+- **KISS принцип** - упростить код
+- **Тесты как документация** - понятно, что делает код
+
+## 📊 Пример TDD сессии
+
+```
+[12:00] 🔴 RED: test_add_user_message() - FAILED ❌
+[12:03] 🟢 GREEN: Реализация add_user_message() - PASSED ✅
+[12:07] 🔵 REFACTOR: Добавлена валидация - PASSED ✅
+[12:10] 💾 COMMIT: "Add DialogManager.add_user_message() with validation"
+
+[12:15] 🔴 RED: test_add_assistant_message() - FAILED ❌
+[12:18] 🟢 GREEN: Реализация add_assistant_message() - PASSED ✅
+[12:20] 💾 COMMIT: "Add DialogManager.add_assistant_message()"
+
+[12:25] 🔴 RED: test_clear_history() - FAILED ❌
+[12:27] 🟢 GREEN: Реализация clear_history() - PASSED ✅
+[12:28] 💾 COMMIT: "Add DialogManager.clear_history()"
+
+[12:30] ✅ Итерация завершена: 3 функции, 8 тестов, 92% coverage
+```
+
+## 🎯 Чек-лист перед коммитом
+
+- [ ] Все тесты зеленые (`pytest`)
+- [ ] Coverage не упал (`make test`)
+- [ ] Код отформатирован (`make format`)
+- [ ] Линтер доволен (`make lint`)
+- [ ] Типы проверены (`make type-check`)
+- [ ] Коммит описывает изменения
+
+---
+
+> **TDD Мантра**: Red (напиши failing тест) → Green (заставь его пройти) → Refactor (улучши код) → Commit (зафиксируй)
+
+> **Помните**: Если тест не падал, значит вы не знаете, что он тестирует.

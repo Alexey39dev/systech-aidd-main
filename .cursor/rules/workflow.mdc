@@ -1,7 +1,6 @@
 ---
-alwaysApply: true
+alwaysApply: false
 ---
-
 # Workflow разработки LLM-ассистента
 
 > Правила выполнения работ по [tasklist.md](tasklist.md) для кодового ассистента

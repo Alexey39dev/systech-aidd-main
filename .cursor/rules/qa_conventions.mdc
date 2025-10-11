@@ -1,0 +1,319 @@
+---
+alwaysApply: true
+---
+# QA Conventions: TDD & Тестирование
+
+> Минимум boilerplate, максимум пользы. Тестируем только критический функционал.
+
+## 🎯 Философия тестирования
+
+### Что тестируем
+- ✅ **Публичные API** - внешние интерфейсы классов/функций
+- ✅ **Бизнес-логику** - критичные алгоритмы и вычисления
+- ✅ **Edge cases** - граничные значения, ошибки, исключения
+- ✅ **Интеграции** - взаимодействие компонентов
+
+### Что НЕ тестируем
+- ❌ Приватные методы напрямую (тестируются через публичный API)
+- ❌ Тривиальные getter/setter без логики
+- ❌ Внешние библиотеки (используем моки)
+- ❌ Код, который просто пробрасывает значения
+
+## 📏 TDD Workflow
+
+### Red → Green → Refactor
+
+1. **Red**: Пишем failing тест (описывает желаемое поведение)
+2. **Green**: Пишем минимальный код для прохождения теста
+3. **Refactor**: Улучшаем код, тесты остаются зелеными
+
+### Пример цикла
+
+```python
+# 1. RED: Тест не проходит (функция не существует)
+def test_add_user_message():
+    manager = DialogManager()
+    manager.add_user_message("Hello")
+    assert len(manager) == 1
+
+# 2. GREEN: Минимальная реализация
+class DialogManager:
+    def __init__(self):
+        self.messages = []
+    def add_user_message(self, text):
+        self.messages.append({"role": "user", "content": text})
+    def __len__(self):
+        return len(self.messages)
+
+# 3. REFACTOR: Улучшаем без изменения API
+```
+
+## 🏗️ Структура тестов
+
+### Организация файлов
+
+```
+tests/
+├── test_<module>.py     # Unit тесты для модуля
+├── test_integration.py  # Интеграционные тесты
+└── conftest.py          # Общие фикстуры (если нужны)
+```
+
+### Именование тестов
+
+```python
+# Формат: test_<что_тестируем>_<сценарий>
+def test_add_message_valid_input()
+def test_retry_on_rate_limit()
+def test_get_response_empty_response()
+```
+
+### Структура теста (AAA)
+
+```python
+def test_dialog_manager_trimming():
+    # Arrange - подготовка
+    manager = DialogManager(max_history=2)
+    
+    # Act - действие
+    for i in range(5):
+        manager.add_user_message(f"msg {i}")
+    
+    # Assert - проверка
+    assert len(manager) == 4  # 2 пары
+```
+
+## 🔧 Инструменты
+
+### Фреймворк: pytest
+
+- **Фикстуры** - переиспользуемые компоненты
+- **Параметризация** - множество сценариев одним тестом
+- **Маркеры** - `@pytest.mark.asyncio` для async кода
+
+### Моки: unittest.mock
+
+```python
+from unittest.mock import Mock, AsyncMock, patch
+
+# Мокаем внешние зависимости
+with patch.object(client, 'create', new_callable=AsyncMock, return_value=mock_response):
+    result = await llm_client.get_response("test")
+```
+
+### Покрытие: pytest-cov
+
+- **Целевое значение**: >80% (не фанатизм, но стремление)
+- **Проверка**: `make test` показывает coverage
+- **Фокус**: покрыть критичные пути, не гнаться за 100%
+
+## ✅ Best Practices
+
+### DRY в тестах
+
+```python
+# ✅ Хорошо: фикстура для повторяющейся логики
+@pytest.fixture
+def llm_client(config):
+    return LLMClient(config)
+
+def test_a(llm_client):
+    assert llm_client.config is not None
+
+def test_b(llm_client):
+    result = await llm_client.get_response("test")
+```
+
+### Параметризация вместо дублирования
+
+```python
+# ✅ Хорошо: один тест для множества случаев
+@pytest.mark.parametrize("max_history", [1, 5, 10, 50])
+def test_history_trimming(max_history):
+    manager = DialogManager(max_history)
+    # ... тест логики для разных значений
+```
+
+### Тестируем поведение, а не реализацию
+
+```python
+# ❌ Плохо: зависит от внутренней реализации
+def test_implementation():
+    assert manager._messages[0]["role"] == "user"
+
+# ✅ Хорошо: тестирует публичное поведение
+def test_behavior():
+    history = manager.get_history()
+    assert history[0]["role"] == "user"
+```
+
+### Независимые тесты
+
+```python
+# ✅ Каждый тест создает свой экземпляр
+def test_a():
+    manager = DialogManager()  # Новый экземпляр
+    
+def test_b():
+    manager = DialogManager()  # Новый экземпляр
+```
+
+### Осмысленные assert сообщения
+
+```python
+# ✅ Хорошо: понятно, что пошло не так
+assert len(history) == 2, f"Expected 2 messages, got {len(history)}"
+```
+
+## 🎭 Моки и стабы
+
+### Когда использовать моки
+
+- **Внешние API** - OpenAI, HTTP запросы
+- **Файловая система** - запись логов
+- **Время** - `asyncio.sleep`, таймауты
+- **Случайность** - `random`, выбор fallback ответов
+
+### Правила моков
+
+```python
+# ✅ Хорошо: мокаем минимально необходимое
+mock_response = Mock()
+mock_response.choices[0].message.content = "test"
+
+# ❌ Плохо: избыточные моки внутренней логики
+# Не мокать то, что можно протестировать реально
+```
+
+## 🔍 Типы тестов
+
+### Unit тесты (основа)
+
+```python
+def test_config_validation():
+    """Один класс/функция в изоляции."""
+    config = Config(openrouter_api_key="test")
+    assert config.openrouter_api_key == "test"
+```
+
+### Integration тесты (выборочно)
+
+```python
+@pytest.mark.asyncio
+async def test_full_dialog_flow():
+    """Несколько компонентов вместе."""
+    manager = DialogManager()
+    llm = LLMClient(config)
+    # ... тест полного сценария
+```
+
+### Edge cases (обязательно)
+
+```python
+@pytest.mark.parametrize("invalid_value", [None, "", -1, 1000000])
+def test_edge_cases(invalid_value):
+    """Граничные и некорректные значения."""
+    with pytest.raises(ValueError):
+        process(invalid_value)
+```
+
+## 🚫 Антипаттерны
+
+### Избегать
+
+```python
+# ❌ Тестирование констант
+def test_constant():
+    assert Config.MAX_RETRIES == 3
+
+# ❌ Тестирование __repr__ (если не критично)
+def test_repr():
+    assert "DialogManager" in repr(manager)
+
+# ❌ Избыточные тесты приватных методов
+def test_private_method():
+    result = manager._internal_helper()
+
+# ❌ Тесты без assert
+def test_no_assertion():
+    manager.add_message("user", "test")  # Что проверяем?
+```
+
+### KISS в тестах
+
+- **1 тест = 1 концепция** - не смешивать проверки
+- **Простые моки** - не создавать сложные mock-иерархии
+- **Читаемость** - тест должен быть понятен новому разработчику
+
+## 📊 Coverage Guidelines
+
+### Приоритеты покрытия
+
+1. **90-100%** - критичная бизнес-логика (LLMClient, DialogManager)
+2. **70-90%** - вспомогательные модули (retry, exceptions)
+3. **50-70%** - UI/console код
+4. **Игнорировать** - `if TYPE_CHECKING:`, `if __name__ == "__main__"`
+
+### Конфигурация coverage
+
+```toml
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+```
+
+## ⚡ Async тесты
+
+```python
+# Всегда используем @pytest.mark.asyncio
+@pytest.mark.asyncio
+async def test_async_function():
+    result = await async_operation()
+    assert result == expected
+```
+
+## 🎯 Минимальный набор тестов
+
+### Для каждого модуля:
+
+1. **Инициализация** - создание экземпляра с валидными параметрами
+2. **Happy path** - основной сценарий использования работает
+3. **Ошибки** - обработка некорректного ввода/состояния
+4. **Edge cases** - граничные значения (0, None, пустые строки)
+
+### Пример минимума
+
+```python
+# Минимальный набор для DialogManager
+def test_initialization()        # Создание
+def test_add_message()           # Основная функция
+def test_history_trimming()      # Критичная логика
+def test_empty_message_handling() # Edge case
+```
+
+## 🔄 Команды
+
+```bash
+make test           # Запуск всех тестов + coverage
+pytest tests/test_dialog_manager.py  # Один модуль
+pytest -v -k "rate_limit"           # Тесты по паттерну
+pytest --cov-report=html            # HTML отчет
+```
+
+## 📝 Чеклист перед коммитом
+
+- [ ] Все тесты проходят (`make test`)
+- [ ] Coverage не упал ниже минимума (>80%)
+- [ ] Новый код покрыт тестами
+- [ ] Нет избыточных/бессмысленных тестов
+- [ ] Тесты читаемые и понятные
+
+---
+
+> **Помните**: Хороший тест = простой, быстрый, понятный, проверяет одну вещь.
+
+> **TDD мантра**: Сначала тест (описывает "что"), потом код (реализует "как").

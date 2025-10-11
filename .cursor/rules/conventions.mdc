@@ -1,7 +1,6 @@
 ---
-alwaysApply: true
+alwaysApply: false
 ---
-
 # Правила разработки кода
 
 > Основано на техническом видении проекта: [docs/vision.md](docs/vision.md)
@@ -57,42 +56,356 @@ src/
 ## Качество кода
 
 ### Документация
-- **Docstrings** - для всех публичных методов
-- **Type hints** - для всех параметров и возвращаемых значений
+- **Docstrings** - для всех публичных методов и классов
+- **Type hints** - для всех параметров и возвращаемых значений (обязательно)
 - **Комментарии** - только для сложной бизнес-логики
+- **README** - актуальная документация по установке и использованию
+
+### Форматирование кода
+- **Инструмент**: Ruff (замена Black + isort)
+- **Длина строки**: 100 символов
+- **Кавычки**: двойные ("string")
+- **Импорты**: автоматическая сортировка через Ruff
+- **Trailing commas**: да (для многострочных структур)
+- **Команда**: `make format` перед каждым коммитом
+
+### Линтинг и статический анализ
+- **Линтер**: Ruff (замена Flake8, pylint, pyupgrade и др.)
+- **Правила**: 
+  - E, F - базовые ошибки
+  - I - сортировка импортов
+  - N - соглашения об именовании
+  - W - предупреждения
+  - UP - современный Python синтаксис
+  - B - типичные ошибки
+  - C4 - оптимизация comprehensions
+  - SIM - упрощение кода
+- **Команда**: `make lint` должна проходить с 0 ошибками
+
+### Проверка типов
+- **Инструмент**: Mypy в strict режиме
+- **Требования**:
+  - Все публичные функции с type hints
+  - Все параметры и возвращаемые значения типизированы
+  - Использование Protocol/TypedDict где необходимо
+  - Literal types для строковых констант
+  - Generic types для контейнеров
+- **Команда**: `make type-check` должна проходить с 0 ошибками
 
 ### Тестирование
-- **Минимальное покрытие** - только критически важные компоненты
-- **Простые тесты** - без сложных моков
-- **Фокус на функциональности** - основные сценарии работы
+- **Фреймворк**: pytest + pytest-asyncio + pytest-cov
+- **Покрытие**: Целевое >80%, минимум 70% для каждого модуля
+- **Структура тестов**:
+  - Unit тесты для каждого класса
+  - Integration тесты для сценариев
+  - Fixture для переиспользуемых компонентов
+  - Параметризация (@pytest.mark.parametrize) для множества случаев
+- **Моки**: Использовать unittest.mock для внешних зависимостей
+- **Async тесты**: @pytest.mark.asyncio для асинхронных функций
+- **Команда**: `make test` должна показывать coverage и 100% passing
 
 ### Логирование
 - **Структурированные логи** - через structlog
 - **Уровни**: INFO (основные события), ERROR (ошибки), DEBUG (отладка)
 - **Консольный вывод** - цветной для разработки
+- **Формат**: JSON для production, читаемый для development
+
+## Автоматизация проверки качества
+
+### Команды Makefile
+```bash
+make format      # Форматирование кода (Ruff)
+make lint        # Проверка стиля (Ruff)
+make type-check  # Проверка типов (Mypy)
+make test        # Запуск тестов + покрытие
+make quality     # Полная проверка (все вышеперечисленное)
+```
+
+### Обязательные проверки перед коммитом
+1. ✅ `make format` - код отформатирован
+2. ✅ `make lint` - 0 ошибок линтера
+3. ✅ `make type-check` - 0 ошибок типизации
+4. ✅ `make test` - все тесты проходят
+
+### CI/CD (будущее)
+- Запуск `make quality` на каждый push
+- Блокировка merge при failing checks
+- Требование минимального покрытия
 
 ## Запрещенные практики
 
 - **Оверинжиниринг** - никаких абстракций "на будущее"
-- **Дублирование кода** - выносить общую логику в отдельные методы
+- **Дублирование кода** - выносить общую логику в отдельные методы (DRY)
 - **Сложные зависимости** - минимум внешних библиотек
 - **Хардкод** - все настройки через конфигурацию
 - **Игнорирование ошибок** - все исключения должны обрабатываться
+- **Generic Exception** - использовать кастомные исключения
+- **Коммиты без проверок** - всегда `make quality` перед коммитом
+- **Код без тестов** - критический функционал должен быть покрыт
+- **Игнорирование типов** - `# type: ignore` только с комментарием причины
 
 ## Пример кода
 
 ```python
+from typing import Protocol
+
+class MessageHandler(Protocol):
+    """Protocol для обработчиков сообщений."""
+    async def process_message(self, message: Message) -> None: ...
+
 class TelegramBot:
+    """Telegram бот для обработки сообщений."""
+    
+    def __init__(self, dialog_manager: DialogManager) -> None:
+        """Инициализация бота.
+        
+        Args:
+            dialog_manager: Менеджер диалогов
+        """
+        self.dialog_manager = dialog_manager
+        self.logger = get_logger("bot")
+    
     async def process_message(self, message: Message) -> None:
-        """Обработка входящего сообщения от пользователя."""
+        """Обработка входящего сообщения от пользователя.
+        
+        Args:
+            message: Сообщение от пользователя
+            
+        Raises:
+            BotError: При ошибке обработки сообщения
+        """
         try:
             response = await self.dialog_manager.get_response(message)
             await self.send_message(message.user_id, response)
-        except Exception as e:
-            logger.error("Ошибка обработки сообщения", error=str(e))
+        except LLMError as e:
+            self.logger.error("Ошибка LLM", error=str(e))
             await self.send_error_message(message.user_id)
+        except Exception as e:
+            self.logger.error("Неожиданная ошибка", error=str(e))
+            raise BotError(f"Failed to process message: {e}") from e
+```
+
+## Лучшие практики Python
+
+### SOLID принципы
+
+#### Single Responsibility Principle (SRP)
+- Один класс = одна ответственность
+- Один метод = одна задача
+- Если класс делает больше одной вещи - разделить
+
+```python
+# ❌ Плохо: класс делает слишком много
+class UserManager:
+    def create_user(self): ...
+    def send_email(self): ...
+    def log_action(self): ...
+
+# ✅ Хорошо: разделены ответственности
+class UserRepository:
+    def create_user(self): ...
+
+class EmailService:
+    def send_email(self): ...
+
+class AuditLogger:
+    def log_action(self): ...
+```
+
+#### Open/Closed Principle (OCP)
+- Открыт для расширения, закрыт для модификации
+- Использовать наследование/композицию вместо изменения существующего кода
+
+```python
+# ✅ Хорошо: можно добавить новый тип без изменения базового
+class ErrorHandler(ABC):
+    @abstractmethod
+    async def handle(self, error: Exception) -> str: ...
+
+class RateLimitHandler(ErrorHandler):
+    async def handle(self, error: RateLimitError) -> str:
+        return "Rate limit exceeded"
+```
+
+#### Dependency Inversion Principle (DIP)
+- Зависеть от абстракций, а не от конкретных реализаций
+- Использовать Protocol/ABC для определения интерфейсов
+
+```python
+# ✅ Хорошо: зависимость от Protocol
+class ConsoleApp:
+    def __init__(self, llm_client: LLMClientProtocol) -> None:
+        self.llm = llm_client
+```
+
+### DRY (Don't Repeat Yourself)
+
+#### Избегать дублирования кода
+```python
+# ❌ Плохо: дублирование
+def handle_error_a(e):
+    logger.error("Error A", error=str(e))
+    return "Sorry, error occurred"
+
+def handle_error_b(e):
+    logger.error("Error B", error=str(e))
+    return "Sorry, error occurred"
+
+# ✅ Хорошо: общая функция
+def handle_error(error_type: str, e: Exception) -> str:
+    logger.error(f"Error {error_type}", error=str(e))
+    return ErrorMessages.GENERIC_ERROR.value
+```
+
+#### Использовать константы/Enum вместо магических значений
+```python
+# ❌ Плохо: магические значения
+if max_retries > 3:
+    raise Exception("Too many retries")
+
+# ✅ Хорошо: константы
+class RetryConfig:
+    MAX_RETRIES = 3
+    INITIAL_DELAY = 1.0
+
+if attempts > RetryConfig.MAX_RETRIES:
+    raise MaxRetriesExceeded("Too many retries")
+```
+
+### Pythonic код
+
+#### Использовать list/dict comprehensions
+```python
+# ✅ Хорошо
+user_ids = [msg.user_id for msg in messages if msg.role == "user"]
+```
+
+#### Использовать context managers
+```python
+# ✅ Хорошо: автоматическое управление ресурсами
+async with aiohttp.ClientSession() as session:
+    response = await session.get(url)
+```
+
+#### Использовать dataclasses для данных
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Message:
+    role: str
+    content: str
+    timestamp: float
+```
+
+#### Использовать pathlib вместо os.path
+```python
+# ✅ Хорошо
+from pathlib import Path
+
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+```
+
+### Обработка ошибок
+
+#### Создавать иерархию исключений
+```python
+class AppError(Exception):
+    """Базовая ошибка приложения."""
+
+class LLMError(AppError):
+    """Ошибка работы с LLM."""
+
+class LLMConnectionError(LLMError):
+    """Ошибка подключения к LLM."""
+```
+
+#### Использовать raise ... from ...
+```python
+# ✅ Хорошо: сохранение traceback
+try:
+    response = await api_call()
+except httpx.HTTPError as e:
+    raise LLMConnectionError("Failed to connect") from e
+```
+
+#### Не глотать исключения
+```python
+# ❌ Плохо
+try:
+    dangerous_operation()
+except Exception:
+    pass  # Молчаливое игнорирование
+
+# ✅ Хорошо
+try:
+    dangerous_operation()
+except ValueError as e:
+    logger.error("Invalid value", error=str(e))
+    raise
+```
+
+### Асинхронность
+
+#### Использовать async/await для I/O операций
+```python
+# ✅ Хорошо: все I/O операции асинхронные
+async def get_response(self, message: str) -> str:
+    response = await self.client.chat.completions.create(...)
+    return response.choices[0].message.content
+```
+
+#### Избегать blocking операций в async коде
+```python
+# ❌ Плохо: blocking операция в async
+async def process(self):
+    time.sleep(1)  # Блокирует event loop!
+
+# ✅ Хорошо
+async def process(self):
+    await asyncio.sleep(1)
+```
+
+#### Использовать asyncio.gather для параллелизма
+```python
+# ✅ Хорошо: параллельное выполнение
+results = await asyncio.gather(
+    fetch_user(1),
+    fetch_user(2),
+    fetch_user(3)
+)
+```
+
+### Типизация
+
+#### Использовать строгую типизацию
+```python
+from typing import Protocol, TypedDict, Literal
+
+Role = Literal["user", "assistant", "system"]
+
+class MessageDict(TypedDict):
+    role: Role
+    content: str
+
+def add_message(self, role: Role, content: str) -> None:
+    ...
+```
+
+#### Использовать Protocol для duck typing
+```python
+from typing import Protocol
+
+class Closeable(Protocol):
+    async def close(self) -> None: ...
+
+async def cleanup(resource: Closeable) -> None:
+    await resource.close()
 ```
 
 ---
 
 > **Помните**: Код должен быть простым, понятным и работать. Никаких компромиссов с качеством, но и никакого оверинжиниринга.
+
+> **Баланс**: Применяйте лучшие практики разумно. KISS важнее "идеального" кода.
