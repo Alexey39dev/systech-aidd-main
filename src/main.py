@@ -26,8 +26,8 @@ async def main():
     """Главная функция запуска приложения с улучшенной обработкой ошибок."""
     global _app_instance
     
-    # Базовая настройка логирования для начала
-    setup_logging("INFO", console_output=False)
+    # Базовая настройка логирования для начала (без цветов и файла)
+    setup_logging("INFO", console_output=False, colorful=False)
     logger = get_logger("main")
     
     try:
@@ -51,7 +51,12 @@ async def main():
             return 1
         
         # Обновление настроек логирования на основе конфигурации
-        setup_logging(config.log_level, console_output=False)
+        setup_logging(
+            log_level=config.log_level,
+            console_output=False,  # Для консольного приложения выключаем логи в консоль
+            file_output=config.log_file_path if config.log_to_file else None,
+            colorful=config.log_colorful
+        )
         logger.info("Конфигурация успешно загружена")
         
         # Создание консольного приложения

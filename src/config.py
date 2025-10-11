@@ -2,14 +2,10 @@
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Config(BaseSettings):
     """Конфигурация приложения с валидацией через Pydantic."""
-    
-    # Telegram Bot Configuration
-    telegram_bot_token: str = Field(..., description="Telegram Bot Token")
     
     # OpenRouter API Configuration  
     openrouter_api_key: str = Field(..., description="OpenRouter API Key")
@@ -44,17 +40,29 @@ class Config(BaseSettings):
     
     # Logging Configuration
     log_level: str = Field(
-        default="INFO", 
+        default="INFO",
         description="Logging level"
     )
-    
-    class Config:
-        """Настройки Pydantic."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        # Приоритет: переменные окружения > .env файл > значения по умолчанию
-        env_prefix = ""
+    log_to_file: bool = Field(
+        default=False,
+        description="Enable logging to file"
+    )
+    log_file_path: str = Field(
+        default="logs/app.log",
+        description="Path to log file"
+    )
+    log_colorful: bool = Field(
+        default=True,
+        description="Enable colorful console output for logs"
+    )
+
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False,
+        "env_prefix": "",
+        "extra": "ignore"
+    }
         
     def __str__(self) -> str:
         """Строковое представление конфигурации (без секретных данных)."""
@@ -65,6 +73,7 @@ class Config(BaseSettings):
             f"llm_model='{self.llm_model}', "
             f"llm_temperature={self.llm_temperature}, "
             f"llm_max_tokens={self.llm_max_tokens}, "
-            f"log_level='{self.log_level}'"
+            f"log_level='{self.log_level}', "
+            f"log_to_file={self.log_to_file}"
             f")"
         )
