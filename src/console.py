@@ -2,6 +2,7 @@
 
 import asyncio
 from typing import Optional
+from openai import APIError, APIConnectionError, RateLimitError, APITimeoutError
 
 from .config import Config
 from .llm_client import LLMClient
@@ -27,7 +28,7 @@ class ConsoleApp:
 
     async def get_response(self, user_message: str) -> str:
         """
-        Получение ответа от LLM.
+        Получение ответа от LLM с улучшенной обработкой ошибок.
 
         Args:
             user_message: Сообщение пользователя
@@ -48,10 +49,53 @@ class ConsoleApp:
             self.dialog_manager.add_assistant_message(response)
             
             return response
+        
+        except RateLimitError as e:
+            self.logger.error("Rate limit превышен", error=str(e))
+            return (
+                "Извините, превышен лимит запросов к сервису. "
+                "Пожалуйста, подождите немного и попробуйте снова."
+            )
+            
+        except APIConnectionError as e:
+            self.logger.error("Ошибка подключения к API", error=str(e))
+            return (
+                "Извините, не удалось подключиться к серверу. "
+                "Проверьте подключение к интернету и попробуйте снова."
+            )
+            
+        except APITimeoutError as e:
+            self.logger.error("Таймаут API", error=str(e))
+            return (
+                "Извините, сервер не ответил вовремя. "
+                "Попробуйте отправить запрос еще раз."
+            )
+            
+        except APIError as e:
+            self.logger.error("Ошибка API", error=str(e), status_code=getattr(e, 'status_code', None))
+            if hasattr(e, 'status_code'):
+                if 400 <= e.status_code < 500:
+                    return (
+                        f"Извините, произошла ошибка запроса (код {e.status_code}). "
+                        "Попробуйте перефразировать ваш вопрос."
+                    )
+                elif 500 <= e.status_code < 600:
+                    return (
+                        f"Извините, на сервере произошла ошибка (код {e.status_code}). "
+                        "Попробуйте позже."
+                    )
+            return "Извините, произошла ошибка при обращении к сервису."
+            
+        except KeyboardInterrupt:
+            # Пробрасываем дальше для корректного завершения
+            raise
             
         except Exception as e:
-            self.logger.error("Ошибка получения ответа от LLM", error=str(e))
-            return "Извините, произошла ошибка при обработке вашего запроса."
+            self.logger.error("Неожиданная ошибка получения ответа", error=str(e), error_type=type(e).__name__)
+            return (
+                "Извините, произошла неожиданная ошибка. "
+                "Попробуйте еще раз или обратитесь к администратору."
+            )
 
     def clear_history(self) -> None:
         """Очистка истории диалога."""

@@ -1,48 +1,90 @@
-"""Главный файл для запуска Telegram-бота."""
+"""Главный файл для запуска консольного LLM-ассистента."""
 
 import asyncio
 import signal
 import sys
+from pydantic import ValidationError
 
 from .config import Config
-from .logger import setup_logging, get_logger, log_config_info
-from .bot import TelegramBot
+from .logger import setup_logging, get_logger
+from .console import ConsoleApp
+
+
+# Глобальная переменная для приложения (для обработки сигналов)
+_app_instance = None
+
+
+def handle_shutdown_signal(signum, frame):
+    """Обработка сигналов завершения."""
+    global _app_instance
+    if _app_instance and _app_instance.is_running:
+        print("\n\nПолучен сигнал завершения. Завершаю работу...")
+        asyncio.create_task(_app_instance.stop())
 
 
 async def main():
-    """Главная функция запуска бота."""
+    """Главная функция запуска приложения с улучшенной обработкой ошибок."""
+    global _app_instance
+    
+    # Базовая настройка логирования для начала
+    setup_logging("INFO", console_output=False)
     logger = get_logger("main")
     
     try:
-        # Загрузка конфигурации
-        logger.info("Загрузка конфигурации")
-        config = Config()
+        # Загрузка конфигурации с обработкой ошибок валидации
+        try:
+            config = Config()
+        except ValidationError as e:
+            logger.error("Ошибка валидации конфигурации", error=str(e))
+            print("\nОшибка конфигурации:")
+            print(f"  {str(e)}")
+            print("\nПроверьте файл .env и убедитесь, что все обязательные параметры заданы.")
+            return 1
+        except FileNotFoundError:
+            logger.error("Файл .env не найден")
+            print("\nОшибка: файл .env не найден.")
+            print("Создайте файл .env на основе .env.example")
+            return 1
+        except Exception as e:
+            logger.error("Ошибка загрузки конфигурации", error=str(e), error_type=type(e).__name__)
+            print(f"\nНе удалось загрузить конфигурацию: {str(e)}")
+            return 1
         
-        # Настройка логирования
-        setup_logging(config.log_level)
-        logger.info("Логирование настроено", level=config.log_level)
+        # Обновление настроек логирования на основе конфигурации
+        setup_logging(config.log_level, console_output=False)
+        logger.info("Конфигурация успешно загружена")
         
-        # Логирование информации о конфигурации
-        log_config_info(config)
+        # Создание консольного приложения
+        try:
+            app = ConsoleApp(config)
+            _app_instance = app
+        except Exception as e:
+            logger.error("Ошибка создания приложения", error=str(e), error_type=type(e).__name__)
+            print(f"\nНе удалось создать приложение: {str(e)}")
+            return 1
         
-        # Создание и запуск бота
-        logger.info("Создание экземпляра бота")
-        bot = TelegramBot(config)
+        # Настройка обработки сигналов для graceful shutdown
+        signal.signal(signal.SIGINT, handle_shutdown_signal)
+        signal.signal(signal.SIGTERM, handle_shutdown_signal)
         
-        # Обработка сигналов для graceful shutdown
-        def signal_handler():
-            logger.info("Получен сигнал остановки")
-            asyncio.create_task(bot.stop())
+        # Запуск приложения
+        logger.info("Запуск консольного приложения")
+        await app.run()
+        logger.info("Приложение завершило работу")
         
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-        
-        logger.info("Запуск бота")
-        await bot.start_polling()
+    except KeyboardInterrupt:
+        logger.info("Приложение прервано пользователем (Ctrl+C)")
+        print("\n\nПриложение остановлено пользователем")
+        return 0
         
     except Exception as e:
-        logger.error("Критическая ошибка", error=str(e))
+        logger.error("Критическая ошибка", error=str(e), error_type=type(e).__name__)
+        print(f"\nКритическая ошибка: {str(e)}")
         return 1
+    
+    finally:
+        logger.info("Очистка ресурсов")
+        _app_instance = None
     
     return 0
 
@@ -52,5 +94,8 @@ if __name__ == "__main__":
         exit_code = asyncio.run(main())
         sys.exit(exit_code)
     except KeyboardInterrupt:
-        print("\nБот остановлен пользователем")
+        print("\n\nПриложение остановлено пользователем")
         sys.exit(0)
+    except Exception as e:
+        print(f"\nФатальная ошибка: {str(e)}")
+        sys.exit(1)
