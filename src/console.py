@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 
 from .config import Config
+from .database import DatabaseClient
 from .dialog_manager import DialogManager
 from .exceptions import LLMError
 from .llm_client import LLMClient
@@ -15,17 +16,21 @@ from .role_manager import RoleManager
 class ConsoleApp:
     """Консольное приложение для взаимодействия с LLM."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, db_client: DatabaseClient, user_id: int):
         """
         Инициализация консольного приложения.
 
         Args:
             config: Конфигурация приложения
+            db_client: Клиент базы данных
+            user_id: ID пользователя
         """
         self.config = config
         self.logger = get_logger("console")
         self.llm_client = LLMClient(config)
-        self.dialog_manager = DialogManager(max_history=config.max_history)
+        self.dialog_manager = DialogManager(
+            db_client=db_client, user_id=user_id, max_history=config.max_history
+        )
         self.role_manager = RoleManager(
             Path(config.system_prompt_file) if config.system_prompt_file else None
         )
@@ -42,16 +47,19 @@ class ConsoleApp:
             Ответ ассистента
         """
         try:
+            # Получаем историю из БД
+            conversation_history = await self.dialog_manager.get_history()
+
             # Получаем ответ от LLM с учетом истории
             response = await self.llm_client.get_response(
                 user_message=user_message,
                 system_prompt=self.config.system_prompt,
-                conversation_history=self.dialog_manager.get_history(),
+                conversation_history=conversation_history,
             )
 
             # Добавляем в историю после успешного получения ответа
-            self.dialog_manager.add_user_message(user_message)
-            self.dialog_manager.add_assistant_message(response)
+            await self.dialog_manager.add_user_message(user_message)
+            await self.dialog_manager.add_assistant_message(response)
 
             return response
 
@@ -86,13 +94,13 @@ class ConsoleApp:
             )
             return ErrorMessages.UNEXPECTED_ERROR.value
 
-    def clear_history(self) -> None:
+    async def clear_history(self) -> None:
         """Очистка истории диалога."""
-        self.dialog_manager.clear_history()
+        await self.dialog_manager.clear_history()
 
-    def print_history(self) -> None:
+    async def print_history(self) -> None:
         """Вывод истории диалога."""
-        history = self.dialog_manager.get_history()
+        history = await self.dialog_manager.get_history()
 
         if not history:
             print(InfoMessages.HISTORY_EMPTY.value)
@@ -116,9 +124,9 @@ class ConsoleApp:
         print(f"Всего сообщений: {len(history)}")
         print(InfoMessages.SEPARATOR_SHORT.value + "\n")
 
-    def print_stats(self) -> None:
+    async def print_stats(self) -> None:
         """Вывод статистики диалога."""
-        stats = self.dialog_manager.get_conversation_summary()
+        stats = await self.dialog_manager.get_conversation_summary()
 
         print("\n" + InfoMessages.SEPARATOR_SHORT.value)
         print(InfoMessages.STATS_HEADER.value)
@@ -212,14 +220,14 @@ class ConsoleApp:
         elif command == "/help":
             self.print_help()
         elif command == "/history":
-            self.print_history()
+            await self.print_history()
         elif command == "/stats":
-            self.print_stats()
+            await self.print_stats()
         elif command == "/role":
             self.print_role_info()
         elif command == "/clear":
-            stats = self.dialog_manager.get_conversation_summary()
-            self.clear_history()
+            stats = await self.dialog_manager.get_conversation_summary()
+            await self.clear_history()
             print(InfoMessages.HISTORY_CLEARED.value.format(count=stats["total_messages"]))
         else:
             print(ErrorMessages.UNKNOWN_COMMAND.value.format(command=command))

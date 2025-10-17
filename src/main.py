@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from .config import Config
 from .console import ConsoleApp
+from .database import DatabaseClient
 from .exceptions import ConfigError
 from .logger import get_logger, setup_logging
 from .messages import ErrorMessages, InfoMessages
@@ -21,6 +22,7 @@ class ApplicationContext:
     def __init__(self) -> None:
         """Инициализация контекста приложения."""
         self.app: ConsoleApp | None = None
+        self.db_client: DatabaseClient | None = None
         self.logger = get_logger("context")
         self._shutdown_event = asyncio.Event()
 
@@ -32,6 +34,15 @@ class ApplicationContext:
         """
         self.app = app
         self.logger.info("Приложение установлено в контекст")
+
+    def set_db_client(self, db_client: DatabaseClient) -> None:
+        """Установить клиент БД.
+
+        Args:
+            db_client: Клиент базы данных
+        """
+        self.db_client = db_client
+        self.logger.info("Database client установлен в контекст")
 
     def request_shutdown(self) -> None:
         """Запросить остановку приложения.
@@ -50,6 +61,12 @@ class ApplicationContext:
             await self.app.stop()
             self.logger.info("Приложение остановлено")
 
+        # Закрываем соединение с БД
+        if self.db_client:
+            self.logger.info("Закрытие подключения к БД...")
+            await self.db_client.close()
+            self.logger.info("Подключение к БД закрыто")
+
     async def wait_for_shutdown(self) -> None:
         """Ожидать сигнала остановки."""
         await self._shutdown_event.wait()
@@ -57,6 +74,7 @@ class ApplicationContext:
     def cleanup(self) -> None:
         """Очистить ресурсы контекста."""
         self.app = None
+        self.db_client = None
         self.logger.info("Контекст приложения очищен")
 
 
@@ -132,9 +150,51 @@ async def main() -> int:
         )
         logger.info("Конфигурация успешно загружена")
 
+        # Инициализация подключения к БД
+        try:
+            logger.info("Инициализация подключения к БД")
+            db_client = DatabaseClient(
+                database_url=config.database_url,
+                pool_min_size=config.database_pool_min_size,
+                pool_max_size=config.database_pool_max_size,
+            )
+            await db_client.connect()
+            context.set_db_client(db_client)
+            logger.info("Подключение к БД успешно установлено")
+        except Exception as e:
+            logger.error(
+                "Ошибка подключения к БД",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            print(ErrorMessages.CRITICAL_ERROR.value.format(error=f"Database: {str(e)}"))
+            return 1
+
+        # Запрос username у пользователя
+        try:
+            username_input = await asyncio.get_event_loop().run_in_executor(
+                None, input, "Введите ваше имя: "
+            )
+            username = username_input.strip()
+            if not username:
+                username = "anonymous"
+                print(f"Использую имя по умолчанию: {username}")
+
+            user_id, _ = await db_client.get_or_create_user(username)
+            logger.info("Пользователь инициализирован", user_id=user_id, username=username)
+        except Exception as e:
+            logger.error(
+                "Ошибка инициализации пользователя",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            print(ErrorMessages.CRITICAL_ERROR.value.format(error=f"User: {str(e)}"))
+            await db_client.close()
+            return 1
+
         # Создание консольного приложения
         try:
-            app = ConsoleApp(config)
+            app = ConsoleApp(config, db_client, user_id)
             context.set_app(app)
         except Exception as e:
             logger.error(
@@ -143,6 +203,9 @@ async def main() -> int:
                 error_type=type(e).__name__,
             )
             print(ErrorMessages.CRITICAL_ERROR.value.format(error=str(e)))
+            # Закрываем БД перед выходом
+            if db_client:
+                await db_client.close()
             return 1
 
         # Настройка обработки сигналов для graceful shutdown

@@ -27,6 +27,18 @@ class Config(BaseSettings):
         default=1000, ge=100, le=4000, description="Maximum tokens for LLM response"
     )
 
+    # Database Configuration
+    database_url: str = Field(
+        default="postgresql://aidd_user:aidd_password@localhost:5434/aidd_db",
+        description="PostgreSQL database connection URL",
+    )
+    database_pool_min_size: int = Field(
+        default=5, ge=1, le=50, description="Minimum database connection pool size"
+    )
+    database_pool_max_size: int = Field(
+        default=20, ge=1, le=100, description="Maximum database connection pool size"
+    )
+
     # Logging Configuration
     log_level: str = Field(default="INFO", description="Logging level")
     log_to_file: bool = Field(default=False, description="Enable logging to file")
@@ -61,6 +73,8 @@ class Config(BaseSettings):
 
     def __str__(self) -> str:
         """Строковое представление конфигурации (без секретных данных)."""
+        # Скрываем пароль в database_url
+        db_url_masked = self.database_url.split("@")[-1] if "@" in self.database_url else "***"
         return (
             f"Config("
             f"system_prompt='{self.system_prompt[:50]}...', "
@@ -68,6 +82,8 @@ class Config(BaseSettings):
             f"llm_model='{self.llm_model}', "
             f"llm_temperature={self.llm_temperature}, "
             f"llm_max_tokens={self.llm_max_tokens}, "
+            f"database='{db_url_masked}', "
+            f"db_pool={self.database_pool_min_size}-{self.database_pool_max_size}, "
             f"log_level='{self.log_level}', "
             f"log_to_file={self.log_to_file}"
             f")"

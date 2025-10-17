@@ -12,6 +12,9 @@
 - **pydantic** - валидация данных и настройки конфигурации
 - **python-dotenv** - управление переменными окружения
 - **structlog** - структурированное логирование
+- **asyncpg** - асинхронный PostgreSQL драйвер для raw SQL запросов
+- **alembic** - система миграций базы данных
+- **psycopg2-binary** - PostgreSQL адаптер для Alembic
 
 ### Инструменты качества кода
 - **ruff** - линтер и форматтер (замена black, flake8, isort, и др.)
@@ -26,13 +29,18 @@
 - **Производительность**: асинхронная архитектура
 - **Надежность**: проверенные библиотеки
 
-### Исключенные технологии (для MVP)
-- База данных (используем хранение в памяти)
-- Docker (усложняет для начальной разработки)
+### Добавленные технологии (Sprint S001)
+- **PostgreSQL 16** - персистентное хранение истории диалогов
+- **Docker** - контейнеризация PostgreSQL для упрощения развертывания
+- **asyncpg** - высокопроизводительный асинхронный драйвер для PostgreSQL
+- **Alembic** - управление миграциями базы данных с raw SQL
+
+### Исключенные технологии (пока не требуются)
 - Веб-интерфейс
-- Telegram API
+- Telegram API  
 - Сложные фреймворки
 - Множественные LLM провайдеры (только OpenRouter)
+- ORM (используем raw SQL для прозрачности и контроля)
 
 ---
 
@@ -75,10 +83,11 @@ systech-aidd/
 │   ├── main.py             # Точка входа
 │   ├── console.py          # ConsoleApp класс
 │   ├── llm_client.py       # LLMClient класс
-│   ├── dialog_manager.py   # DialogManager класс
+│   ├── dialog_manager.py   # DialogManager класс (async)
+│   ├── database.py         # DatabaseClient класс ⭐ НОВОЕ (S001)
 │   ├── config.py           # Config класс
 │   ├── logger.py           # Logger класс
-│   ├── role_manager.py     # RoleManager класс ⭐ НОВОЕ
+│   ├── role_manager.py     # RoleManager класс
 │   ├── exceptions.py       # Иерархия исключений
 │   ├── retry_utils.py      # Retry логика
 │   ├── messages.py         # Константы сообщений
@@ -91,24 +100,37 @@ systech-aidd/
 ├── tests/
 │   ├── __init__.py
 │   ├── test_config.py      # Тесты конфигурации
-│   ├── test_console.py     # Тесты ConsoleApp
-│   ├── test_dialog_manager.py  # Тесты DialogManager
+│   ├── test_console.py     # Тесты ConsoleApp (async)
+│   ├── test_dialog_manager.py  # Тесты DialogManager (async)
+│   ├── test_database.py    # Тесты DatabaseClient ⭐ НОВОЕ (S001)
 │   ├── test_llm_client.py  # Тесты LLMClient
-│   ├── test_role_manager.py  # Тесты RoleManager ⭐ НОВОЕ
-│   └── test_integration.py # Интеграционные тесты
+│   ├── test_role_manager.py  # Тесты RoleManager
+│   └── test_integration.py # Интеграционные тесты (async)
 ├── docs/
 │   ├── idea.md
 │   ├── vision.md
 │   ├── conventions.md
 │   ├── configuration.md
-│   ├── tasklist.md
-│   └── workflow.md
+│   ├── DATABASE_SETUP.md   # ⭐ НОВОЕ (S001) - документация по БД
+│   ├── roadmap.md
+│   └── tasklists/
+│       ├── tasklist-S000.md
+│       ├── tasklist_tech_dept-S000.md
+│       └── tasklist-S001.md
 ├── .cursor/
-│   └── rules/
-│       ├── conventions.mdc
-│       ├── qa_conventions.mdc    # ⭐ НОВОЕ
-│       ├── workflow.mdc
-│       └── workflow_tdd.mdc      # ⭐ НОВОЕ
+│   ├── rules/
+│   │   ├── conventions.mdc
+│   │   ├── qa_conventions.mdc
+│   │   ├── workflow.mdc
+│   │   └── workflow_tdd.mdc
+│   └── plans/
+│       └── sprint-s001-database-22a47090.plan.md  # ⭐ НОВОЕ (S001)
+├── docker-compose.yml      # ⭐ НОВОЕ (S001) - PostgreSQL в Docker
+├── alembic.ini            # ⭐ НОВОЕ (S001) - конфигурация Alembic
+├── alembic/               # ⭐ НОВОЕ (S001) - миграции БД
+│   ├── env.py
+│   └── versions/
+│       └── 8c240cbf9c6f_create_messages_table.py
 ├── .env.example            # Пример переменных окружения
 ├── .env                    # Локальные настройки (в .gitignore)
 ├── pyproject.toml          # Конфигурация проекта и инструментов
@@ -143,11 +165,13 @@ systech-aidd/
    - Обработка ответов от LLM
    - Обработка ошибок API (rate limit, timeout, connection)
 
-3. **DialogManager** (`dialog_manager.py`)
-   - Управление историей диалога
-   - Добавление и хранение сообщений
-   - Обрезка истории по max_history
+3. **DialogManager** (`dialog_manager.py`) ⭐ **ОБНОВЛЕНО (S001)**
+   - Управление историей диалога через БД
+   - Асинхронные операции (async/await)
+   - Добавление и хранение сообщений в PostgreSQL
+   - Обрезка истории по max_history (soft delete)
    - Получение статистики диалога
+   - Интеграция с DatabaseClient
 
 4. **Config** (`config.py`)
    - Загрузка настроек из переменных окружения
@@ -159,26 +183,37 @@ systech-aidd/
    - Цветной вывод для консоли
    - Логирование в файл (опционально)
 
-6. **RoleManager** (`role_manager.py`) ⭐ **НОВОЕ**
+6. **RoleManager** (`role_manager.py`)
    - Загрузка системных промптов из файлов
    - Парсинг метаданных роли (заголовок, описание)
    - Валидация файлов промптов
    - Предоставление информации о текущей роли
    - Поддержка команды `/role`
 
-### Дополнительные компоненты (планируются)
+7. **DatabaseClient** (`database.py`) ⭐ **НОВОЕ (S001)**
+   - Управление подключением к PostgreSQL (asyncpg pool)
+   - Raw SQL запросы для операций с БД
+   - CRUD операции для сообщений:
+     - `add_message()` - INSERT с автоматическим подсчетом длины
+     - `get_messages()` - SELECT только активных (не удаленных)
+     - `soft_delete_message()` - UPDATE deleted_at (soft delete)
+     - `clear_all_messages()` - массовое soft delete
+   - Параметризованные запросы (защита от SQL инъекций)
+   - Lifecycle управление (connect/close)
 
-7. **Exceptions** (`exceptions.py`)
+### Дополнительные компоненты
+
+8. **Exceptions** (`exceptions.py`)
    - Иерархия кастомных исключений
    - AppError, LLMError, ConfigError и др.
    - Улучшение обработки ошибок
 
-8. **RetryUtils** (`retry_utils.py`)
+9. **RetryUtils** (`retry_utils.py`)
    - Декораторы/функции для retry логики
    - Exponential backoff
    - Конфигурируемые параметры
 
-9. **Messages** (`messages.py`)
+10. **Messages** (`messages.py`)
    - Константы для сообщений пользователю
    - Enum для ErrorMessages, InfoMessages
    - Централизованное управление текстами
@@ -187,11 +222,13 @@ systech-aidd/
 ```
 Пользователь (консоль) 
     ↓
-ConsoleApp
+ConsoleApp (async)
     ↓
-DialogManager ← (история диалога)
+DialogManager (async) ⭐ ОБНОВЛЕНО (S001)
     ↓
-RoleManager ← (системный промпт из файла) ⭐ НОВОЕ
+DatabaseClient → PostgreSQL ⭐ НОВОЕ (S001)
+    ↑
+RoleManager ← (системный промпт из файла)
     ↓
 LLMClient → OpenRouter API
     ↓
@@ -223,23 +260,42 @@ LLMClient → OpenRouter API
    - `role` - роль отправителя (строго user/assistant/system)
    - `content` - текст сообщения
 
-2. **Dialog History** (List[MessageDict])
+2. **MessageDict** (TypedDict) ⭐ **НОВОЕ (S001)**
    ```python
-   history: list[MessageDict] = [
-       {"role": "user", "content": "Привет"},
-       {"role": "assistant", "content": "Здравствуйте!"}
-   ]
+   class MessageDict(TypedDict):
+       role: MessageRole
+       content: str
+       created_at: str  # ISO format timestamp
+       length: int
    ```
-   - Список сообщений в формате OpenAI API
-   - Хранение в памяти в DialogManager
-   - Типизирован как `List[Dict[str, str]]`
+   - Сообщение с метаданными для использования в приложении
+   - Возвращается из БД после конвертации
 
-3. **Config** (Pydantic модель)
+3. **MessageDBDict** (TypedDict) ⭐ **НОВОЕ (S001)**
+   ```python
+   class MessageDBDict(TypedDict):
+       id: int
+       role: MessageRole
+       content: str
+       created_at: str  # ISO format timestamp
+       length: int
+       deleted_at: str | None  # NULL = активное, NOT NULL = удалено
+   ```
+   - Полная запись сообщения из БД со всеми полями
+   - Включает информацию о soft delete
+
+4. **Dialog History** ⭐ **ОБНОВЛЕНО (S001)**
+   - Хранение в PostgreSQL (таблица `messages`)
+   - Персистентность между перезапусками
+   - Типизировано как `List[MessageDict]` для использования в приложении
+   - Raw SQL запросы через asyncpg
+
+5. **Config** (Pydantic модель) ⭐ **ОБНОВЛЕНО (S001)**
    ```python
    class Config(BaseSettings):
        openrouter_api_key: str  # обязательное поле
        system_prompt: str = "..."  # с default (альтернатива файлу)
-       system_prompt_file: str = "prompts/default.txt"  # путь к файлу ⭐ НОВОЕ
+       system_prompt_file: str = "prompts/default.txt"  # путь к файлу
        max_history: int = Field(default=10, ge=1, le=50)
        llm_model: str = "openai/gpt-3.5-turbo"
        llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
@@ -247,13 +303,19 @@ LLMClient → OpenRouter API
        log_level: str = "INFO"
        log_to_file: bool = False
        log_file_path: str = "logs/app.log"
+       
+       # ⭐ НОВОЕ (S001): Параметры БД
+       database_url: str = "postgresql://aidd_user:aidd_password@localhost:5434/aidd_db"
+       database_pool_min_size: int = Field(default=5, ge=1, le=50)
+       database_pool_max_size: int = Field(default=20, ge=1, le=100)
    ```
    - Все поля типизированы
    - Валидация через Pydantic Field с ограничениями
    - Автоматическая загрузка из .env
-   - Поддержка промпта из файла или строки ⭐ обновлено
+   - Поддержка промпта из файла или строки
+   - Параметры подключения к PostgreSQL
 
-4. **RoleMetadata** (TypedDict) ⭐ **НОВОЕ**
+6. **RoleMetadata** (TypedDict)
    ```python
    class RoleMetadata(TypedDict):
        name: str              # Название роли
@@ -273,12 +335,41 @@ LLMClient → OpenRouter API
 - **Generic types** - для контейнеров (List[MessageDict], Optional[str])
 - **Mypy strict mode** - полная проверка типов
 
-### Принципы хранения данных
-- **В памяти** - простой список сообщений в DialogManager
-- **Без персистентности** - данные теряются при перезапуске
-- **Простота** - никаких ORM или сложных схем
-- **Минимализм** - только необходимые поля
+### Схема базы данных (PostgreSQL) ⭐ **НОВОЕ (S001)**
+
+**Таблица `messages`:**
+```sql
+CREATE TABLE messages (
+    id SERIAL PRIMARY KEY,
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    length INTEGER NOT NULL,
+    deleted_at TIMESTAMP NULL
+);
+CREATE INDEX idx_messages_deleted_at ON messages(deleted_at);
+```
+
+**Поля:**
+- `id` - автоинкремент, первичный ключ
+- `role` - user/assistant/system
+- `content` - текст сообщения
+- `created_at` - автоматическая дата создания
+- `length` - длина сообщения в символах (вычисляется автоматически)
+- `deleted_at` - NULL = активно, NOT NULL = удалено (soft delete)
+
+**Индексы:**
+- `idx_messages_deleted_at` - для быстрой фильтрации активных сообщений
+
+### Принципы хранения данных ⭐ **ОБНОВЛЕНО (S001)**
+- **PostgreSQL** - персистентное хранение в СУБД
+- **Raw SQL** - прямые запросы через asyncpg без ORM
+- **Soft delete** - данные не удаляются физически, а помечаются
+- **Метаданные** - автоматическое сохранение created_at и length
+- **Простота** - минимальная схема БД, одна таблица
 - **Типобезопасность** - полная типизация для предотвращения ошибок
+- **Асинхронность** - asyncpg для высокой производительности
+- **Миграции** - Alembic с raw SQL для контроля схемы
 
 ## 6. Работа с LLM
 

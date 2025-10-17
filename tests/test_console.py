@@ -1,12 +1,14 @@
 """Тесты для ConsoleApp."""
 
+from datetime import datetime
 from io import StringIO
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from src.config import Config
 from src.console import ConsoleApp
+from src.database import DatabaseClient
 from src.dialog_manager import DialogManager
 
 
@@ -26,10 +28,21 @@ def mock_config():
 
 
 @pytest.fixture
-def console_app(mock_config):
+def mock_db():
+    """Создание мок-клиента БД для тестов."""
+    db = AsyncMock(spec=DatabaseClient)
+    db.add_message = AsyncMock(return_value=(1, datetime(2025, 10, 16, 10, 0, 0)))
+    db.get_messages = AsyncMock(return_value=[])
+    db.clear_all_messages = AsyncMock(return_value=0)
+    db.soft_delete_message = AsyncMock()
+    return db
+
+
+@pytest.fixture
+def console_app(mock_config, mock_db):
     """Создание экземпляра ConsoleApp для тестов."""
     with patch("src.console.LLMClient"):
-        app = ConsoleApp(mock_config)
+        app = ConsoleApp(mock_config, mock_db, user_id=1)
         return app
 
 
@@ -41,13 +54,14 @@ def test_console_app_initialization(console_app):
     assert isinstance(console_app.dialog_manager, DialogManager)
 
 
-def test_clear_history(console_app):
+@pytest.mark.asyncio
+async def test_clear_history(console_app, mock_db):
     """Тест очистки истории."""
-    console_app.dialog_manager.add_user_message("Test message")
-    assert console_app.dialog_manager.get_history_length() == 1
+    mock_db.clear_all_messages = AsyncMock(return_value=1)
+    mock_db.get_messages = AsyncMock(return_value=[])
 
-    console_app.clear_history()
-    assert console_app.dialog_manager.get_history_length() == 0
+    await console_app.clear_history()
+    mock_db.clear_all_messages.assert_called_once()
 
 
 def test_print_welcome(console_app):
@@ -81,23 +95,52 @@ def test_print_help(console_app):
         assert "test/model" in output
 
 
-def test_print_history_empty(console_app):
+@pytest.mark.asyncio
+async def test_print_history_empty(console_app, mock_db):
     """Тест вывода пустой истории."""
+    mock_db.get_messages = AsyncMock(return_value=[])
+
     with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
-        console_app.print_history()
+        await console_app.print_history()
         output = mock_stdout.getvalue()
 
         assert "История диалога пуста" in output
 
 
-def test_print_history_with_messages(console_app):
+@pytest.mark.asyncio
+async def test_print_history_with_messages(console_app, mock_db):
     """Тест вывода истории с сообщениями."""
-    console_app.dialog_manager.add_user_message("Привет!")
-    console_app.dialog_manager.add_assistant_message("Здравствуйте!")
-    console_app.dialog_manager.add_user_message("Как дела?")
+    mock_db.get_messages = AsyncMock(
+        return_value=[
+            {
+                "id": 1,
+                "role": "user",
+                "content": "Привет!",
+                "created_at": "2025-10-16T10:00:00",
+                "length": 7,
+                "deleted_at": None,
+            },
+            {
+                "id": 2,
+                "role": "assistant",
+                "content": "Здравствуйте!",
+                "created_at": "2025-10-16T10:01:00",
+                "length": 13,
+                "deleted_at": None,
+            },
+            {
+                "id": 3,
+                "role": "user",
+                "content": "Как дела?",
+                "created_at": "2025-10-16T10:02:00",
+                "length": 9,
+                "deleted_at": None,
+            },
+        ]
+    )
 
     with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
-        console_app.print_history()
+        await console_app.print_history()
         output = mock_stdout.getvalue()
 
         assert "История диалога:" in output
@@ -107,23 +150,38 @@ def test_print_history_with_messages(console_app):
         assert "Всего сообщений: 3" in output
 
 
-def test_print_history_truncates_long_messages(console_app):
+@pytest.mark.asyncio
+async def test_print_history_truncates_long_messages(console_app, mock_db):
     """Тест обрезки длинных сообщений в истории."""
     long_message = "A" * 150  # Сообщение длиннее 100 символов
-    console_app.dialog_manager.add_user_message(long_message)
+    mock_db.get_messages = AsyncMock(
+        return_value=[
+            {
+                "id": 1,
+                "role": "user",
+                "content": long_message,
+                "created_at": "2025-10-16T10:00:00",
+                "length": 150,
+                "deleted_at": None,
+            }
+        ]
+    )
 
     with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
-        console_app.print_history()
+        await console_app.print_history()
         output = mock_stdout.getvalue()
 
         assert "..." in output
         assert len(long_message) > 100  # Проверяем, что исходное сообщение длинное
 
 
-def test_print_stats_empty(console_app):
+@pytest.mark.asyncio
+async def test_print_stats_empty(console_app, mock_db):
     """Тест вывода статистики для пустого диалога."""
+    mock_db.get_messages = AsyncMock(return_value=[])
+
     with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
-        console_app.print_stats()
+        await console_app.print_stats()
         output = mock_stdout.getvalue()
 
         assert "Статистика диалога:" in output
@@ -133,15 +191,48 @@ def test_print_stats_empty(console_app):
         assert "Заполнено: 0.0%" in output
 
 
-def test_print_stats_with_messages(console_app):
+@pytest.mark.asyncio
+async def test_print_stats_with_messages(console_app, mock_db):
     """Тест вывода статистики с сообщениями."""
-    console_app.dialog_manager.add_user_message("Тест 1")
-    console_app.dialog_manager.add_assistant_message("Ответ 1")
-    console_app.dialog_manager.add_user_message("Тест 2")
-    console_app.dialog_manager.add_assistant_message("Ответ 2")
+    mock_db.get_messages = AsyncMock(
+        return_value=[
+            {
+                "id": 1,
+                "role": "user",
+                "content": "Тест 1",
+                "created_at": "2025-10-16T10:00:00",
+                "length": 6,
+                "deleted_at": None,
+            },
+            {
+                "id": 2,
+                "role": "assistant",
+                "content": "Ответ 1",
+                "created_at": "2025-10-16T10:01:00",
+                "length": 7,
+                "deleted_at": None,
+            },
+            {
+                "id": 3,
+                "role": "user",
+                "content": "Тест 2",
+                "created_at": "2025-10-16T10:02:00",
+                "length": 6,
+                "deleted_at": None,
+            },
+            {
+                "id": 4,
+                "role": "assistant",
+                "content": "Ответ 2",
+                "created_at": "2025-10-16T10:03:00",
+                "length": 7,
+                "deleted_at": None,
+            },
+        ]
+    )
 
     with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
-        console_app.print_stats()
+        await console_app.print_stats()
         output = mock_stdout.getvalue()
 
         assert "Всего сообщений: 4" in output
@@ -171,9 +262,20 @@ async def test_handle_command_help(console_app):
 
 
 @pytest.mark.asyncio
-async def test_handle_command_history(console_app):
+async def test_handle_command_history(console_app, mock_db):
     """Тест команды /history."""
-    console_app.dialog_manager.add_user_message("Test")
+    mock_db.get_messages = AsyncMock(
+        return_value=[
+            {
+                "id": 1,
+                "role": "user",
+                "content": "Test",
+                "created_at": "2025-10-16T10:00:00",
+                "length": 4,
+                "deleted_at": None,
+            }
+        ]
+    )
 
     with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
         result = await console_app.handle_command("/history")
@@ -184,8 +286,10 @@ async def test_handle_command_history(console_app):
 
 
 @pytest.mark.asyncio
-async def test_handle_command_stats(console_app):
+async def test_handle_command_stats(console_app, mock_db):
     """Тест команды /stats."""
+    mock_db.get_messages = AsyncMock(return_value=[])
+
     with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
         result = await console_app.handle_command("/stats")
         output = mock_stdout.getvalue()
@@ -195,10 +299,29 @@ async def test_handle_command_stats(console_app):
 
 
 @pytest.mark.asyncio
-async def test_handle_command_clear(console_app):
+async def test_handle_command_clear(console_app, mock_db):
     """Тест команды /clear."""
-    console_app.dialog_manager.add_user_message("Test 1")
-    console_app.dialog_manager.add_assistant_message("Answer 1")
+    mock_db.get_messages = AsyncMock(
+        return_value=[
+            {
+                "id": 1,
+                "role": "user",
+                "content": "Test 1",
+                "created_at": "2025-10-16T10:00:00",
+                "length": 6,
+                "deleted_at": None,
+            },
+            {
+                "id": 2,
+                "role": "assistant",
+                "content": "Answer 1",
+                "created_at": "2025-10-16T10:01:00",
+                "length": 8,
+                "deleted_at": None,
+            },
+        ]
+    )
+    mock_db.clear_all_messages = AsyncMock(return_value=2)
 
     with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
         result = await console_app.handle_command("/clear")
@@ -207,7 +330,7 @@ async def test_handle_command_clear(console_app):
         assert result is True
         assert "История диалога очищена" in output
         assert "удалено сообщений: 2" in output
-        assert console_app.dialog_manager.get_history_length() == 0
+        mock_db.clear_all_messages.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -240,9 +363,13 @@ async def test_handle_command_case_insensitive(console_app):
 
 
 @pytest.mark.asyncio
-async def test_get_response_success(console_app):
+async def test_get_response_success(console_app, mock_db):
     """Тест успешного получения ответа от LLM."""
     from unittest.mock import AsyncMock
+
+    # Мокаем БД для истории
+    mock_db.get_messages = AsyncMock(return_value=[])
+    mock_db.add_message = AsyncMock(return_value=(1, datetime(2025, 10, 16, 10, 0, 0)))
 
     # Мокаем успешный ответ
     console_app.llm_client.get_response = AsyncMock(return_value="Test response")
@@ -250,21 +377,18 @@ async def test_get_response_success(console_app):
     response = await console_app.get_response("Test question")
 
     assert response == "Test response"
-    assert console_app.dialog_manager.get_history_length() == 2  # user + assistant
-    # Проверяем содержимое истории
-    history = console_app.dialog_manager.get_history()
-    assert history[0]["role"] == "user"
-    assert history[0]["content"] == "Test question"
-    assert history[1]["role"] == "assistant"
-    assert history[1]["content"] == "Test response"
+    # Проверяем что вызвался add_message для user и assistant
+    assert mock_db.add_message.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_get_response_llm_error_with_fallback(console_app):
+async def test_get_response_llm_error_with_fallback(console_app, mock_db):
     """Тест обработки LLMError с успешным fallback."""
     from unittest.mock import AsyncMock
 
     from src.exceptions import LLMConnectionError
+
+    mock_db.get_messages = AsyncMock(return_value=[])
 
     console_app.llm_client.get_response = AsyncMock(
         side_effect=LLMConnectionError("Connection failed")
@@ -275,7 +399,7 @@ async def test_get_response_llm_error_with_fallback(console_app):
 
     assert response == "Fallback response"
     # История не должна добавляться при ошибке
-    assert console_app.dialog_manager.get_history_length() == 0
+    mock_db.add_message.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -324,13 +448,32 @@ async def test_get_response_keyboard_interrupt(console_app):
 
 
 @pytest.mark.asyncio
-async def test_get_response_with_history(console_app):
+async def test_get_response_with_history(console_app, mock_db):
     """Тест что get_response использует историю диалога."""
     from unittest.mock import AsyncMock
 
-    # Добавляем предыдущую историю
-    console_app.dialog_manager.add_user_message("Previous question")
-    console_app.dialog_manager.add_assistant_message("Previous answer")
+    # Мокаем предыдущую историю
+    mock_db.get_messages = AsyncMock(
+        return_value=[
+            {
+                "id": 1,
+                "role": "user",
+                "content": "Previous question",
+                "created_at": "2025-10-16T10:00:00",
+                "length": 17,
+                "deleted_at": None,
+            },
+            {
+                "id": 2,
+                "role": "assistant",
+                "content": "Previous answer",
+                "created_at": "2025-10-16T10:01:00",
+                "length": 15,
+                "deleted_at": None,
+            },
+        ]
+    )
+    mock_db.add_message = AsyncMock(return_value=(3, datetime(2025, 10, 16, 10, 2, 0)))
 
     console_app.llm_client.get_response = AsyncMock(return_value="New response")
 
@@ -383,8 +526,10 @@ async def test_run_with_eof_error(console_app):
 
 
 @pytest.mark.asyncio
-async def test_run_empty_input(console_app):
+async def test_run_empty_input(console_app, mock_db):
     """Тест обработки пустого ввода."""
+    mock_db.get_messages = AsyncMock(return_value=[])
+
     # Пустой ввод игнорируется, затем выход
     with (
         patch("builtins.input", side_effect=["", "   ", "/exit"]),
@@ -392,13 +537,17 @@ async def test_run_empty_input(console_app):
     ):
         await console_app.run()
 
-    assert console_app.dialog_manager.get_history_length() == 0
+    # Проверяем что add_message не вызывался (пустой ввод игнорируется)
+    mock_db.add_message.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_run_with_user_message(console_app):
+async def test_run_with_user_message(console_app, mock_db):
     """Тест обработки обычного сообщения пользователя."""
     from unittest.mock import AsyncMock
+
+    mock_db.get_messages = AsyncMock(return_value=[])
+    mock_db.add_message = AsyncMock(return_value=(1, datetime(2025, 10, 16, 10, 0, 0)))
 
     console_app.llm_client.get_response = AsyncMock(return_value="Response")
 
@@ -408,7 +557,8 @@ async def test_run_with_user_message(console_app):
     ):
         await console_app.run()
 
-    assert console_app.dialog_manager.get_history_length() == 2
+    # Проверяем что add_message вызывался для user и assistant
+    assert mock_db.add_message.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -441,7 +591,7 @@ async def test_stop_when_not_running(console_app):
     assert console_app.is_running is False
 
 
-def test_console_role_command(tmp_path, mock_config):
+def test_console_role_command(tmp_path, mock_config, mock_db):
     """Тест команды /role отображает информацию о роли."""
     # Arrange
     prompt_file = tmp_path / "role.txt"
@@ -452,7 +602,7 @@ def test_console_role_command(tmp_path, mock_config):
     mock_config.system_prompt_file = str(prompt_file)
 
     with patch("src.console.LLMClient"):
-        app = ConsoleApp(mock_config)
+        app = ConsoleApp(mock_config, mock_db, user_id=1)
 
         # Act
         with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
