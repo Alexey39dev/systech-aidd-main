@@ -200,7 +200,46 @@ docker pull ghcr.io/alexey39dev/systech-aidd-main-frontend:latest
 docker images | grep systech-aidd
 ```
 
-**Примечание:** Заменить `[USERNAME]` на реальное имя пользователя GitHub.
+**Готовые образы:** Все образы доступны в GitHub Container Registry без авторизации.
+
+## 🔄 CI/CD Pipeline
+
+### Автоматическая сборка и публикация
+
+Проект использует GitHub Actions для автоматической сборки и публикации Docker образов:
+
+- **Trigger:** Push в ветку `main`
+- **Matrix Strategy:** Параллельная сборка 3 образов (bot, api, frontend)
+- **Registry:** GitHub Container Registry (ghcr.io)
+- **Кеширование:** Docker layer caching для ускорения сборки
+- **Видимость:** Публичные образы (без авторизации)
+
+### Статус сборки
+
+![Build Status](https://github.com/alexey39dev/systech-aidd-main/actions/workflows/build.yml/badge.svg)
+
+### Workflow файл
+
+Конфигурация CI/CD находится в `.github/workflows/build.yml`:
+
+```yaml
+name: Build and Publish Docker Images
+on:
+  push:
+    branches: [main]
+jobs:
+  build-and-push:
+    strategy:
+      matrix:
+        service: [bot, api, frontend]
+    # ... полная конфигурация
+```
+
+### Мониторинг сборок
+
+- **GitHub Actions:** https://github.com/alexey39dev/systech-aidd-main/actions
+- **Packages:** https://github.com/Alexey39dev/systech-aidd-main/pkgs/container/systech-aidd-main-bot
+- **Логи:** Доступны в разделе Actions каждого workflow run
 
 ## 📁 Структура проекта
 

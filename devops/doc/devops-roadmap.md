@@ -55,7 +55,9 @@ MVP DevOps roadmap для проекта systech-aidd. Цель: пройти п
 - ✅ Документация по GitHub Actions
 
 **План реализации:** [d1-build-publish.md](plans/d1-build-publish.md)  
-**Отчет о тестировании:** [d1-testing-report.md](reports/d1-testing-report.md)
+**Отчет о тестировании:** [d1-testing-report.md](reports/d1-testing-report.md)  
+**Отчет о проверке:** [d1-verification.md](reports/d1-verification.md)  
+**Итоговый отчет:** [d1-summary.md](reports/d1-summary.md)
 
 ## D2: Развертывание на сервер
 
