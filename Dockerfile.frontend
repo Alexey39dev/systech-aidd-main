@@ -21,7 +21,8 @@ COPY frontend/public ./public
 
 # Копирование остальных файлов
 COPY frontend/components.json ./
-COPY frontend/next-env.d.ts ./
+# next-env.d.ts может не существовать, копируем только если есть
+COPY frontend/next-env.d.ts* ./
 
 # Открытие порта
 EXPOSE 3000
