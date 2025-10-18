@@ -186,15 +186,15 @@ docker-compose -f docker-compose.prod.yml up
 
 ### Статус сборки
 
-![Build Status](https://github.com/[USERNAME]/systech-aidd-main/actions/workflows/build.yml/badge.svg)
+![Build Status](https://github.com/alexey39dev/systech-aidd-main/actions/workflows/build.yml/badge.svg)
 
 ### Ручное скачивание образов
 
 ```bash
 # Скачать образы вручную
-docker pull ghcr.io/[USERNAME]/systech-aidd-main-bot:latest
-docker pull ghcr.io/[USERNAME]/systech-aidd-main-api:latest
-docker pull ghcr.io/[USERNAME]/systech-aidd-main-frontend:latest
+docker pull ghcr.io/alexey39dev/systech-aidd-main-bot:latest
+docker pull ghcr.io/alexey39dev/systech-aidd-main-api:latest
+docker pull ghcr.io/alexey39dev/systech-aidd-main-frontend:latest
 
 # Проверить образы
 docker images | grep systech-aidd

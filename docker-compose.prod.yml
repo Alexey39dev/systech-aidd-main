@@ -22,7 +22,7 @@ services:
       - systech-network
 
   migrations:
-    image: ghcr.io/[USERNAME]/systech-aidd-main-api:latest
+    image: ghcr.io/alexey39dev/systech-aidd-main-api:latest
     container_name: systech-aidd-migrations
     env_file:
       - .env
@@ -34,7 +34,7 @@ services:
       - systech-network
 
   bot:
-    image: ghcr.io/[USERNAME]/systech-aidd-main-bot:latest
+    image: ghcr.io/alexey39dev/systech-aidd-main-bot:latest
     container_name: systech-aidd-bot
     env_file:
       - .env
@@ -48,7 +48,7 @@ services:
       - systech-network
 
   api:
-    image: ghcr.io/[USERNAME]/systech-aidd-main-api:latest
+    image: ghcr.io/alexey39dev/systech-aidd-main-api:latest
     container_name: systech-aidd-api
     env_file:
       - .env
@@ -64,7 +64,7 @@ services:
       - systech-network
 
   frontend:
-    image: ghcr.io/[USERNAME]/systech-aidd-main-frontend:latest
+    image: ghcr.io/alexey39dev/systech-aidd-main-frontend:latest
     container_name: systech-aidd-frontend
     ports:
       - "3000:3000"
