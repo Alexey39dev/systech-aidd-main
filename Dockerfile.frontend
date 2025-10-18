@@ -5,14 +5,23 @@ WORKDIR /app
 # Установка pnpm
 RUN npm install -g pnpm
 
-# Копирование package.json и pnpm-lock.yaml
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+# Копирование конфигурационных файлов
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/tsconfig.json frontend/next.config.js frontend/tailwind.config.ts frontend/postcss.config.js ./
 
 # Установка зависимостей
 RUN pnpm install
 
-# Копирование остальных файлов frontend
-COPY frontend/ .
+# Копирование исходного кода
+COPY frontend/app ./app
+COPY frontend/components ./components
+COPY frontend/hooks ./hooks
+COPY frontend/lib ./lib
+COPY frontend/types ./types
+COPY frontend/public ./public
+
+# Копирование остальных файлов
+COPY frontend/components.json ./
+COPY frontend/next-env.d.ts ./
 
 # Открытие порта
 EXPOSE 3000

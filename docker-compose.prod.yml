@@ -6,10 +6,8 @@ services:
     container_name: systech-aidd-postgres
     environment:
       POSTGRES_USER: aidd_user
-      POSTGRES_PASSWORD: aidd_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aidd_password}
       POSTGRES_DB: aidd_db
-    ports:
-      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,7 +15,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
+      start_period: 30s
+    restart: always
     networks:
       - systech-network
 
@@ -30,6 +29,7 @@ services:
       postgres:
         condition: service_healthy
     command: ["python", "-m", "alembic", "upgrade", "head"]
+    restart: "no"
     networks:
       - systech-network
 
@@ -43,7 +43,13 @@ services:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
-    restart: unless-stopped
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep python || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - systech-network
 
@@ -53,13 +59,19 @@ services:
     env_file:
       - .env
     ports:
-      - "8000:8000"
+      - "8002:8000"
     depends_on:
       postgres:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
-    restart: unless-stopped
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - systech-network
 
@@ -67,28 +79,18 @@ services:
     image: ghcr.io/alexey39dev/systech-aidd-main-frontend:latest
     container_name: systech-aidd-frontend
     ports:
-      - "3000:3000"
+      - "3002:3000"
     depends_on:
       - api
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
-    restart: unless-stopped
-    networks:
-      - systech-network
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: systech-aidd-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@aidd.local
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
-    depends_on:
-      - postgres
-    restart: unless-stopped
-    profiles:
-      - tools
+      - NEXT_PUBLIC_API_URL=http://89.223.67.136:8002
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - systech-network
 
