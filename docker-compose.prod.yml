@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: systech-aidd-postgres
+    environment:
+      POSTGRES_USER: aidd_user
+      POSTGRES_PASSWORD: aidd_password
+      POSTGRES_DB: aidd_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aidd_user -d aidd_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - systech-network
+
+  migrations:
+    image: ghcr.io/[USERNAME]/systech-aidd-main-api:latest
+    container_name: systech-aidd-migrations
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    networks:
+      - systech-network
+
+  bot:
+    image: ghcr.io/[USERNAME]/systech-aidd-main-bot:latest
+    container_name: systech-aidd-bot
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - systech-network
+
+  api:
+    image: ghcr.io/[USERNAME]/systech-aidd-main-api:latest
+    container_name: systech-aidd-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - systech-network
+
+  frontend:
+    image: ghcr.io/[USERNAME]/systech-aidd-main-frontend:latest
+    container_name: systech-aidd-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    restart: unless-stopped
+    networks:
+      - systech-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: systech-aidd-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@aidd.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    profiles:
+      - tools
+    networks:
+      - systech-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  systech-network:
+    driver: bridge

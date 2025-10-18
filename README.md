@@ -150,6 +150,58 @@ docker-compose run --rm migrations
 - `frontend` - Next.js веб-интерфейс
 - `pgadmin` - Админ панель БД (опционально)
 
+## 🚀 Использование образов из GitHub Container Registry
+
+### Быстрый старт с готовыми образами
+
+Вместо локальной сборки можно использовать готовые образы из GitHub Container Registry:
+
+1. **Создайте .env файл:**
+   ```bash
+   cp .env.example .env
+   # Отредактируйте .env, добавьте OPENROUTER_API_KEY
+   ```
+
+2. **Запустите сервисы из registry:**
+   ```bash
+   docker-compose -f docker-compose.prod.yml up -d
+   ```
+
+3. **Доступ к сервисам:**
+   - API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
+   - Frontend: http://localhost:3000
+
+### Переключение между локальной сборкой и registry
+
+**Локальная сборка (разработка):**
+```bash
+docker-compose up --build
+```
+
+**Образы из registry (production):**
+```bash
+docker-compose -f docker-compose.prod.yml up
+```
+
+### Статус сборки
+
+![Build Status](https://github.com/[USERNAME]/systech-aidd-main/actions/workflows/build.yml/badge.svg)
+
+### Ручное скачивание образов
+
+```bash
+# Скачать образы вручную
+docker pull ghcr.io/[USERNAME]/systech-aidd-main-bot:latest
+docker pull ghcr.io/[USERNAME]/systech-aidd-main-api:latest
+docker pull ghcr.io/[USERNAME]/systech-aidd-main-frontend:latest
+
+# Проверить образы
+docker images | grep systech-aidd
+```
+
+**Примечание:** Заменить `[USERNAME]` на реальное имя пользователя GitHub.
+
 ## 📁 Структура проекта
 
 ```

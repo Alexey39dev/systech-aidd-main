@@ -9,7 +9,7 @@ MVP DevOps roadmap для проекта systech-aidd. Цель: пройти п
 | Код | Описание | Статус |
 |-----|----------|--------|
 | D0 | Basic Docker Setup | ✅ Completed |
-| D1 | Build & Publish | ⏳ Ожидает |
+| D1 | Build & Publish | ✅ Completed |
 | D2 | Развертывание на сервер | ⏳ Ожидает |
 | D3 | Auto Deploy | ⏳ Ожидает |
 
@@ -42,18 +42,20 @@ MVP DevOps roadmap для проекта systech-aidd. Цель: пройти п
 
 ## D1: Build & Publish
 
-**Цели:**
-- Автоматическая сборка и публикация Docker образов в GitHub Container Registry
-- Настроить CI pipeline для автоматической сборки при изменениях в коде
+**Статус:** ✅ **Completed** (18 октября 2025)
 
-**Описание состава работ:**
-- Создать GitHub Actions workflow `.github/workflows/build.yml`
-- Trigger: push в main ветку
-- Собрать 3 образа (bot, api, frontend)
-- Опубликовать образы в ghcr.io с тегом `latest`
-- Создать краткую инструкцию по использованию GitHub Actions для сборки и публикации образов
+**Реализовано:**
+- ✅ GitHub Actions workflow для автоматической сборки
+- ✅ Matrix strategy для параллельной сборки 3 образов
+- ✅ Публикация в GitHub Container Registry (ghcr.io)
+- ✅ Публичный доступ к образам (без авторизации)
+- ✅ Docker layer caching для ускорения сборки
+- ✅ docker-compose.prod.yml для использования registry образов
+- ✅ Badge статуса сборки в README
+- ✅ Документация по GitHub Actions
 
-**План реализации:** [Будет создан после выполнения спринта](plans/)
+**План реализации:** [d1-build-publish.md](plans/d1-build-publish.md)  
+**Отчет о тестировании:** [d1-testing-report.md](reports/d1-testing-report.md)
 
 ## D2: Развертывание на сервер
 
