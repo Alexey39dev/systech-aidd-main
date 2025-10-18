@@ -172,6 +172,29 @@ docker-compose run --rm migrations
    - API Docs: http://localhost:8000/docs
    - Frontend: http://localhost:3000
 
+## 🌐 Production Deployment
+
+### Развертывание на сервере
+
+Проект успешно развернут на production сервере:
+
+**🌍 Production URL:**
+- **API:** http://89.223.67.136:8002
+- **API Documentation:** http://89.223.67.136:8002/docs
+- **Frontend Dashboard:** http://89.223.67.136:3002
+
+**📋 Инструкция по развертыванию:**
+- [Руководство по ручному развертыванию](docs/guides/manual-deploy.md)
+- [Шаблон production конфигурации](env.production.template)
+
+**🔧 Технические детали:**
+- **Сервер:** 89.223.67.136
+- **Пользователь:** systech
+- **Порты:** API (8002), Frontend (3002)
+- **База данных:** PostgreSQL 16 с автоматическими миграциями
+- **Контейнеры:** Docker Compose с образами из GitHub Container Registry
+- **Мониторинг:** Health checks для всех сервисов
+
 ### Переключение между локальной сборкой и registry
 
 **Локальная сборка (разработка):**
