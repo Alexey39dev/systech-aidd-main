@@ -10,7 +10,7 @@ class Config(BaseSettings):
     """Конфигурация приложения с валидацией через Pydantic."""
 
     # OpenRouter API Configuration
-    openrouter_api_key: str = Field(..., description="OpenRouter API Key")
+    openrouter_api_key: str = Field(default="test_key", description="OpenRouter API Key")
 
     # LLM Configuration
     system_prompt: str = Field(
@@ -44,6 +44,22 @@ class Config(BaseSettings):
     log_to_file: bool = Field(default=False, description="Enable logging to file")
     log_file_path: str = Field(default="logs/app.log", description="Path to log file")
     log_colorful: bool = Field(default=True, description="Enable colorful console output for logs")
+
+    # API Configuration
+    api_host: str = Field(default="0.0.0.0", description="API server host")
+    api_port: int = Field(default=8000, ge=1, le=65535, description="API server port")
+    api_reload: bool = Field(default=True, description="Enable auto-reload in development mode")
+    stat_collector_type: str = Field(
+        default="mock",
+        description="Type of stat collector to use: 'mock' or 'real'",
+    )
+
+    # Chat Configuration
+    chat_enabled: bool = Field(default=True, description="Enable chat API")
+    text_to_sql_enabled: bool = Field(default=True, description="Enable admin mode with text-to-SQL")
+    session_expire_hours: int = Field(
+        default=24, ge=1, le=168, description="Session expiration time in hours"
+    )
 
     model_config = {
         "env_file": ".env",
@@ -85,6 +101,8 @@ class Config(BaseSettings):
             f"database='{db_url_masked}', "
             f"db_pool={self.database_pool_min_size}-{self.database_pool_max_size}, "
             f"log_level='{self.log_level}', "
-            f"log_to_file={self.log_to_file}"
+            f"log_to_file={self.log_to_file}, "
+            f"api={self.api_host}:{self.api_port}, "
+            f"stat_collector={self.stat_collector_type}"
             f")"
         )
