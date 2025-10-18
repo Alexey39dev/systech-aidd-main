@@ -170,15 +170,11 @@ async def main() -> int:
             print(ErrorMessages.CRITICAL_ERROR.value.format(error=f"Database: {str(e)}"))
             return 1
 
-        # Запрос username у пользователя
+        # Получение username из переменной окружения или использование значения по умолчанию
         try:
-            username_input = await asyncio.get_event_loop().run_in_executor(
-                None, input, "Введите ваше имя: "
-            )
-            username = username_input.strip()
-            if not username:
-                username = "anonymous"
-                print(f"Использую имя по умолчанию: {username}")
+            # В Docker контейнере используем переменную окружения или значение по умолчанию
+            username = config.bot_username if hasattr(config, 'bot_username') else "docker-user"
+            logger.info(f"Используется имя пользователя: {username}")
 
             user_id, _ = await db_client.get_or_create_user(username)
             logger.info("Пользователь инициализирован", user_id=user_id, username=username)

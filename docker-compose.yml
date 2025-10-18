@@ -18,6 +18,72 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - systech-network
+
+  # Сервис миграций БД (один раз при старте)
+  migrations:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: systech-aidd-migrations
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    networks:
+      - systech-network
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    container_name: systech-aidd-bot
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - systech-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: systech-aidd-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - systech-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: systech-aidd-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    restart: unless-stopped
+    networks:
+      - systech-network
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -32,8 +98,14 @@ services:
     restart: unless-stopped
     profiles:
       - tools
+    networks:
+      - systech-network
 
 volumes:
   postgres_data:
     driver: local
+
+networks:
+  systech-network:
+    driver: bridge
 

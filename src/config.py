@@ -61,6 +61,9 @@ class Config(BaseSettings):
         default=24, ge=1, le=168, description="Session expiration time in hours"
     )
 
+    # Bot Configuration
+    bot_username: str = Field(default="docker-user", description="Bot username for Docker container")
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

@@ -2,6 +2,26 @@
 
 Простой LLM-ассистент с консольным интерфейсом для ведения диалога и ответов на вопросы пользователя с заданной ролью через системный промпт.
 
+## 🐳 Quick Start
+
+**Запуск всех сервисов одной командой:**
+```bash
+docker-compose up -d
+```
+
+**Доступ к сервисам:**
+- 🌐 **API:** http://localhost:8000
+- 📊 **API Docs:** http://localhost:8000/docs  
+- 💻 **Frontend:** http://localhost:3000
+- 📈 **Dashboard:** http://localhost:3000/dashboard
+
+**Остановка:**
+```bash
+docker-compose down
+```
+
+> 📖 **Подробная документация:** [Запуск через Docker](#-запуск-через-docker)
+
 ---
 
 ## 🎉 Новое: Frontend Dashboard
@@ -79,6 +99,56 @@
    ```bash
    .\run.ps1
    ```
+
+## 🐳 Запуск через Docker
+
+### Быстрый старт
+
+1. **Создайте .env файл:**
+   ```bash
+   cp .env.example .env
+   # Отредактируйте .env, добавьте OPENROUTER_API_KEY
+   ```
+
+2. **Запустите все сервисы:**
+   ```bash
+   docker-compose up
+   ```
+
+3. **Доступ к сервисам:**
+   - API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
+   - Frontend Dashboard: http://localhost:3000/dashboard
+   - Frontend Chat: http://localhost:3000/chat
+   - PgAdmin: http://localhost:5050 (профиль tools: `docker-compose --profile tools up`)
+
+### Команды Docker
+
+```bash
+# Запустить в фоновом режиме
+docker-compose up -d
+
+# Остановить все сервисы
+docker-compose down
+
+# Пересобрать образы
+docker-compose build
+
+# Просмотр логов
+docker-compose logs -f [service_name]
+
+# Запустить миграции вручную
+docker-compose run --rm migrations
+```
+
+### Структура сервисов
+
+- `postgres` - База данных PostgreSQL 16
+- `migrations` - Автоматический запуск миграций Alembic
+- `bot` - Консольный AI-ассистент
+- `api` - FastAPI сервер для статистики и чата
+- `frontend` - Next.js веб-интерфейс
+- `pgadmin` - Админ панель БД (опционально)
 
 ## 📁 Структура проекта
 

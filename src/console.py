@@ -240,6 +240,22 @@ class ConsoleApp:
         self.is_running = True
         self.print_welcome()
 
+        # Проверяем, запущены ли мы в Docker контейнере
+        if self._is_docker_environment():
+            self.logger.info("Обнаружена Docker среда, запуск в режиме ожидания")
+            print("Bot инициализирован и готов к работе в Docker контейнере.")
+            print("Для интерактивного использования запустите контейнер в интерактивном режиме:")
+            print("docker-compose run --rm bot")
+            print("\nBot работает в фоновом режиме. Нажмите Ctrl+C для остановки.")
+            
+            # Работаем в режиме ожидания, чтобы контейнер не перезапускался
+            try:
+                while self.is_running:
+                    await asyncio.sleep(1)
+            except KeyboardInterrupt:
+                print("\nПолучен сигнал остановки. До свидания!")
+            return
+
         try:
             while self.is_running:
                 try:
@@ -274,6 +290,16 @@ class ConsoleApp:
             print(f"\nКритическая ошибка: {str(e)}")
         finally:
             self.is_running = False
+
+    def _is_docker_environment(self) -> bool:
+        """Проверяет, запущено ли приложение в Docker контейнере."""
+        try:
+            with open('/proc/1/cgroup', 'r') as f:
+                return 'docker' in f.read()
+        except (FileNotFoundError, PermissionError):
+            # Если файл недоступен, проверяем переменную окружения
+            import os
+            return os.path.exists('/.dockerenv')
 
     async def stop(self) -> None:
         """Остановка консольного приложения."""
